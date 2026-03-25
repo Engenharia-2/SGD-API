@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import path from 'node:path';
 import { initDatabase, pool } from './config/db.js';
 
 // Importação das Rotas
@@ -15,9 +16,14 @@ const app: Express = express();
 const port = process.env.PORT || 3003;
 
 // Middlewares Globais
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Permite que o Electron acesse os arquivos
+}));
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos físicos da pasta uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Rota de Health Check
 app.get('/health', async (req: Request, res: Response) => {

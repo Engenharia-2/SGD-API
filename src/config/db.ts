@@ -48,12 +48,40 @@ export async function initDatabase() {
         size INT,
         sector VARCHAR(50) NOT NULL,
         category VARCHAR(20) NOT NULL,
+        responsible VARCHAR(100),
+        version VARCHAR(20),
+        status VARCHAR(20) DEFAULT 'Revisão',
+        creation_date DATE,
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
 
     await pool.query(createUsersTable);
     await pool.query(createDocsTable);
+
+    // Garantir que novas colunas existam para bancos já criados
+    try {
+      const [columns]: any = await pool.query("SHOW COLUMNS FROM documents");
+      const columnNames = columns.map((c: any) => c.Field);
+      
+      if (!columnNames.includes('responsible')) {
+        await pool.query("ALTER TABLE documents ADD COLUMN responsible VARCHAR(100)");
+      }
+      if (!columnNames.includes('version')) {
+        await pool.query("ALTER TABLE documents ADD COLUMN version VARCHAR(20)");
+      }
+      if (!columnNames.includes('status')) {
+        await pool.query("ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'Revisão'");
+      }
+      if (!columnNames.includes('creation_date')) {
+        await pool.query("ALTER TABLE documents ADD COLUMN creation_date DATE");
+      }
+      if (!columnNames.includes('parent_id')) {
+        await pool.query("ALTER TABLE documents ADD COLUMN parent_id INT NULL");
+      }
+    } catch (err) {
+      console.warn('Aviso ao atualizar tabela documents:', err);
+    }
 
     // Garantir que a coluna is_authorized exista
     try {
