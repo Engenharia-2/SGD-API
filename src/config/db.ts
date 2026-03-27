@@ -56,8 +56,49 @@ export async function initDatabase() {
       );
     `;
 
+    const createNotificationsTable = `
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        sector VARCHAR(50) NOT NULL,
+        document_id INT,
+        type VARCHAR(50) DEFAULT 'info',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL
+      );
+    `;
+
+    const createUserNotificationsTable = `
+      CREATE TABLE IF NOT EXISTS user_notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        notification_id INT NOT NULL,
+        user_id INT NOT NULL,
+        is_read TINYINT(1) DEFAULT 0,
+        read_at TIMESTAMP NULL,
+        FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY user_notif (user_id, notification_id)
+      );
+    `;
+
+    const createUserFavoritesTable = `
+      CREATE TABLE IF NOT EXISTS user_favorites (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        document_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+        UNIQUE KEY user_doc_fav (user_id, document_id)
+      );
+    `;
+
     await pool.query(createUsersTable);
     await pool.query(createDocsTable);
+    await pool.query(createNotificationsTable);
+    await pool.query(createUserNotificationsTable);
+    await pool.query(createUserFavoritesTable);
 
     // Garantir que novas colunas existam para bancos já criados
     try {

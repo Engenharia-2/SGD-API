@@ -1,5 +1,13 @@
 import { Router } from 'express';
-import { uploadDocument, listDocuments, deleteDocument, updateDocument } from '../controllers/documentController.js';
+import { 
+  uploadDocument, 
+  listDocuments, 
+  deleteDocument, 
+  updateDocumentStatus,
+  favoriteDocument,
+  unfavoriteDocument,
+  listFavorites
+} from '../controllers/documentController.js';
 import { upload } from '../config/multer.js';
 import { authenticateJWT, authorizeRoles } from '../middlewares/authMiddleware.js';
 
@@ -7,6 +15,11 @@ const router = Router();
 
 // Listagem é permitida para todos os autenticados
 router.get('/', authenticateJWT, listDocuments);
+router.get('/favorites', authenticateJWT, listFavorites);
+
+// Operações de favoritação
+router.post('/:id/favorite', authenticateJWT, favoriteDocument);
+router.delete('/:id/favorite', authenticateJWT, unfavoriteDocument);
 
 // Operações de escrita permitidas apenas para Administrador e Gestor
 router.post(
@@ -17,12 +30,11 @@ router.post(
   uploadDocument
 );
 
-router.put(
-  '/:id', 
+router.patch(
+  '/:id/status', 
   authenticateJWT, 
   authorizeRoles('Administrador', 'Gestor'), 
-  upload.single('file'),
-  updateDocument
+  updateDocumentStatus
 );
 
 router.delete(

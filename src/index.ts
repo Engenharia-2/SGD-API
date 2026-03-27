@@ -9,6 +9,7 @@ import { initDatabase, pool } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ app.get('/health', async (req: Request, res: Response) => {
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/documents', documentRoutes);
+app.use('/notifications', notificationRoutes);
 
 // Inicialização segura
 initDatabase().then(() => {

@@ -41,7 +41,15 @@ export const login = async (req: Request, res: Response) => {
       JWT_SECRET,
       { expiresIn: '8h' }
     );
-    res.json({ token, user: { username: user.username, sector: user.sector, role: user.role } });
+    res.json({ 
+      token, 
+      user: { 
+        id: user.id, 
+        username: user.username, 
+        sector: user.sector, 
+        role: user.role 
+      } 
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
