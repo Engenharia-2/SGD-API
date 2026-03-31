@@ -1,22 +1,36 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { ApiResponse } from '../utils/apiResponse.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+
+export type UserRole = 'Administrador' | 'Gestor' | 'Funcionario';
+
+export type Permission = 'LEITURA' | 'ESCRITA' | 'MODIFICACAO' | 'AUTORIZACAO';
+
+const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  'Administrador': ['LEITURA', 'ESCRITA', 'MODIFICACAO', 'AUTORIZACAO'],
+  'Gestor': ['LEITURA', 'ESCRITA', 'MODIFICACAO', 'AUTORIZACAO'],
+  'Funcionario': ['LEITURA']
+};
 
 export interface AuthRequest extends Request {
   user?: {
     id: number;
     username: string;
     sector: string;
-    role: 'Administrador' | 'Gestor' | 'Funcionario'; // Alinhado com o Front-end
+    role: UserRole;
   };
 }
 
+/**
+ * Middleware para autenticar o token JWT.
+ */
 export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Acesso negado. Token não fornecido.' });
+    return ApiResponse.error(res, 'Acesso negado. Token não fornecido.', 401);
   }
 
   const token = authHeader.split(' ')[1];
@@ -26,19 +40,53 @@ export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunct
     req.user = decoded;
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Token inválido ou expirado.' });
+    return ApiResponse.error(res, 'Token inválido ou expirado.', 403);
   }
 };
 
-export const authorizeRoles = (...allowedRoles: string[]) => {
+/**
+ * Middleware para autorizar com base na permissão específica.
+ */
+export const authorizePermission = (permission: Permission) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (!req.user) return res.status(401).json({ error: 'Não autenticado.' });
+    if (!req.user) return ApiResponse.error(res, 'Não autenticado.', 401);
+
+    const userPermissions = ROLE_PERMISSIONS[req.user.role] || [];
+
+    if (!userPermissions.includes(permission)) {
+      return ApiResponse.error(res, `Permissão negada. Você não possui nível de ${permission}.`, 403);
+    }
+
+    next();
+  };
+};
+
+/**
+ * Middleware legado para autorizar com base em roles (mantido para compatibilidade enquanto migramos).
+ */
+export const authorizeRoles = (...allowedRoles: UserRole[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) return ApiResponse.error(res, 'Não autenticado.', 401);
     
-    // Verifica se a role do usuário (ex: "Administrador") está na lista permitida
     if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Permissão negada para esta operação.' });
+      return ApiResponse.error(res, 'Permissão negada para esta operação.', 403);
     }
     
     next();
   };
+};
+
+/**
+ * Middleware para validar se o usuário pertence ao setor ou é Administrador.
+ */
+export const checkSector = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) return ApiResponse.error(res, 'Não autenticado.', 401);
+  
+  const targetSector = req.params.sector || req.query.sector || req.body.sector;
+  
+  if (req.user.role !== 'Administrador' && targetSector && req.user.sector !== targetSector) {
+    return ApiResponse.error(res, 'Acesso negado. Você não pertence a este setor.', 403);
+  }
+  
+  next();
 };

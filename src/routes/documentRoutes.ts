@@ -11,40 +11,54 @@ import {
   handleApprovalAction
 } from '../controllers/documentController.js';
 import { upload } from '../config/multer.js';
-import { authenticateJWT, authorizeRoles } from '../middlewares/authMiddleware.js';
+import { authenticateJWT, authorizePermission, checkSector } from '../middlewares/authMiddleware.js';
 
 const router = Router();
 
-// Listagem é permitida para todos os autenticados
-router.get('/', authenticateJWT, listDocuments);
-router.get('/favorites', authenticateJWT, listFavorites);
-router.get('/pending-approvals', authenticateJWT, authorizeRoles('Administrador', 'Gestor'), listPendingApprovals);
+// Listagem é permitida para todos (LEITURA)
+router.get('/', authenticateJWT, authorizePermission('LEITURA'), checkSector, listDocuments);
+router.get('/favorites', authenticateJWT, authorizePermission('LEITURA'), listFavorites);
 
-// Operações de favoritação e aprovação
-router.post('/:id/favorite', authenticateJWT, favoriteDocument);
-router.delete('/:id/favorite', authenticateJWT, unfavoriteDocument);
-router.post('/:id/approve-action', authenticateJWT, authorizeRoles('Administrador', 'Gestor'), handleApprovalAction);
+// Aprovações exigem nível de AUTORIZACAO e setor correto
+router.get(
+  '/pending-approvals', 
+  authenticateJWT, 
+  authorizePermission('AUTORIZACAO'), 
+  listPendingApprovals
+);
 
-// Operações de escrita permitidas apenas para Administrador e Gestor
+router.post(
+  '/:id/approve-action', 
+  authenticateJWT, 
+  authorizePermission('AUTORIZACAO'), 
+  handleApprovalAction
+);
+
+// Favoritação (Leitura)
+router.post('/:id/favorite', authenticateJWT, authorizePermission('LEITURA'), favoriteDocument);
+router.delete('/:id/favorite', authenticateJWT, authorizePermission('LEITURA'), unfavoriteDocument);
+
+// Operações de Escrita
 router.post(
   '/upload', 
   authenticateJWT, 
-  authorizeRoles('Administrador', 'Gestor'), 
+  authorizePermission('ESCRITA'), 
   upload.single('file'), 
   uploadDocument
 );
 
+// Operações de Modificação
 router.patch(
   '/:id/status', 
   authenticateJWT, 
-  authorizeRoles('Administrador', 'Gestor'), 
+  authorizePermission('MODIFICACAO'), 
   updateDocumentStatus
 );
 
 router.delete(
   '/:id', 
   authenticateJWT, 
-  authorizeRoles('Administrador', 'Gestor'), 
+  authorizePermission('MODIFICACAO'), 
   deleteDocument
 );
 

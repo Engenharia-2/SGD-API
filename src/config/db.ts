@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
+import { SCHEMA_QUERIES } from './schema.js';
 
 dotenv.config();
 
@@ -26,143 +27,52 @@ export async function initDatabase() {
       queueLimit: 0
     });
 
-    const createUsersTable = `
-      CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(100) NOT NULL UNIQUE,
-        password VARCHAR(255) NOT NULL,
-        sector VARCHAR(50) NOT NULL,
-        role VARCHAR(50) NOT NULL,
-        is_authorized TINYINT(1) DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    const createDocsTable = `
-      CREATE TABLE IF NOT EXISTS documents (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        filename VARCHAR(255) NOT NULL,
-        original_name VARCHAR(255) NOT NULL,
-        mimetype VARCHAR(100),
-        size INT,
-        sector VARCHAR(50) NOT NULL,
-        category VARCHAR(20) NOT NULL,
-        responsible VARCHAR(100),
-        version VARCHAR(20),
-        status VARCHAR(20) DEFAULT 'Revisão',
-        is_published TINYINT(1) DEFAULT 0,
-        creation_date DATE,
-        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    const createDocumentApprovalsTable = `
-      CREATE TABLE IF NOT EXISTS document_approvals (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        document_id INT NOT NULL,
-        user_id INT NOT NULL,
-        status ENUM('Pendente', 'Aprovado', 'Rejeitado') DEFAULT 'Pendente',
-        rejection_reason TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        UNIQUE KEY unique_approval (document_id, user_id)
-      );
-    `;
-
-    const createDocumentVisibilityTable = `
-      CREATE TABLE IF NOT EXISTS document_visibility (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        document_id INT NOT NULL,
-        sector_name VARCHAR(50) NOT NULL,
-        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
-      );
-    `;
-
-    const createNotificationsTable = `
-      CREATE TABLE IF NOT EXISTS notifications (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        sector VARCHAR(50) NOT NULL,
-        document_id INT,
-        type VARCHAR(50) DEFAULT 'info',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL
-      );
-    `;
-
-    const createUserNotificationsTable = `
-      CREATE TABLE IF NOT EXISTS user_notifications (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        notification_id INT NOT NULL,
-        user_id INT NOT NULL,
-        is_read TINYINT(1) DEFAULT 0,
-        read_at TIMESTAMP NULL,
-        FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        UNIQUE KEY user_notif (user_id, notification_id)
-      );
-    `;
-
-    const createUserFavoritesTable = `
-      CREATE TABLE IF NOT EXISTS user_favorites (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        document_id INT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
-        UNIQUE KEY user_doc_fav (user_id, document_id)
-      );
-    `;
-
-    await pool.query(createUsersTable);
-    await pool.query(createDocsTable);
-    await pool.query(createDocumentApprovalsTable);
-    await pool.query(createDocumentVisibilityTable);
-    await pool.query(createNotificationsTable);
-    await pool.query(createUserNotificationsTable);
-    await pool.query(createUserFavoritesTable);
-
-    // Garantir que novas colunas existam para bancos já criados
-    try {
-      const [columns]: any = await pool.query("SHOW COLUMNS FROM documents");
-      const columnNames = columns.map((c: any) => c.Field);
-      
-      if (!columnNames.includes('responsible')) {
-        await pool.query("ALTER TABLE documents ADD COLUMN responsible VARCHAR(100)");
-      }
-      if (!columnNames.includes('version')) {
-        await pool.query("ALTER TABLE documents ADD COLUMN version VARCHAR(20)");
-      }
-      if (!columnNames.includes('status')) {
-        await pool.query("ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'Revisão'");
-      }
-      if (!columnNames.includes('is_published')) {
-        await pool.query("ALTER TABLE documents ADD COLUMN is_published TINYINT(1) DEFAULT 0 AFTER status");
-      }
-      if (!columnNames.includes('creation_date')) {
-        await pool.query("ALTER TABLE documents ADD COLUMN creation_date DATE");
-      }
-      if (!columnNames.includes('parent_id')) {
-        await pool.query("ALTER TABLE documents ADD COLUMN parent_id INT NULL");
-      }
-    } catch (err) {
-      console.warn('Aviso ao atualizar tabela documents:', err);
+    // Inicializar tabelas
+    for (const query of SCHEMA_QUERIES) {
+      await pool.query(query);
     }
 
-    // Garantir que a coluna is_authorized exista
-    try {
-      await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_authorized TINYINT(1) DEFAULT 0 AFTER role;");
-    } catch (err) {
-      // Ignorar se já existe
-    }
+    // Garantir colunas extras (Migrações simples)
+    await ensureColumns();
 
     console.log('[db]: Conexão e tabelas inicializadas com sucesso.');
   } catch (err) {
     console.error('[db]: Erro Crítico:', err);
     process.exit(1);
+  }
+}
+
+async function ensureColumns() {
+  try {
+    const [columns]: any = await pool.query("SHOW COLUMNS FROM documents");
+    const columnNames = columns.map((c: any) => c.Field);
+    
+    if (!columnNames.includes('responsible')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN responsible VARCHAR(100)");
+    }
+    if (!columnNames.includes('version')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN version VARCHAR(20)");
+    }
+    if (!columnNames.includes('status')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'Revisão'");
+    }
+    if (!columnNames.includes('is_published')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN is_published TINYINT(1) DEFAULT 0 AFTER status");
+    }
+    if (!columnNames.includes('creation_date')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN creation_date DATE");
+    }
+    if (!columnNames.includes('parent_id')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN parent_id INT NULL");
+    }
+    
+    // Check users table
+    const [userColumns]: any = await pool.query("SHOW COLUMNS FROM users");
+    const userColumnNames = userColumns.map((c: any) => c.Field);
+    if (!userColumnNames.includes('is_authorized')) {
+      await pool.query("ALTER TABLE users ADD COLUMN is_authorized TINYINT(1) DEFAULT 0 AFTER role");
+    }
+  } catch (err) {
+    console.warn('Aviso ao validar colunas do banco:', err);
   }
 }

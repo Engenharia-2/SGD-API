@@ -1,47 +1,40 @@
-import { Request, Response } from 'express';
-import { pool } from '../config/db.js';
+import { Request, Response, NextFunction } from 'express';
 import { notificationEmitter } from '../config/events.js';
+import { Notification } from '../types/index.js';
+import { NotificationRepository } from '../repositories/notificationRepository.js';
+import { ApiResponse, ApiError } from '../utils/apiResponse.js';
 
-export const getNotifications = async (req: Request, res: Response): Promise<void> => {
+export const getNotifications = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { userId, sector } = req.params;
+  const user = (req as any).user;
 
   try {
-    const [rows]: any = await pool.query(`
-      SELECT n.*, IF(un.is_read IS NULL, 0, un.is_read) as is_read
-      FROM notifications n
-      LEFT JOIN user_notifications un ON n.id = un.notification_id AND un.user_id = ?
-      WHERE (n.sector = ? OR n.sector = 'Geral')
-      AND (
-        -- Mostrar se for uma notificação geral (sem entradas em user_notifications)
-        NOT EXISTS (SELECT 1 FROM user_notifications un2 WHERE un2.notification_id = n.id)
-        -- OU se for especificamente para este usuário
-        OR un.user_id IS NOT NULL
-      )
-      ORDER BY n.created_at DESC
-      LIMIT 50
-    `, [userId, sector]);
+    // Apenas o próprio usuário ou Administrador pode ver estas notificações
+    if (user.role !== 'Administrador' && Number(userId) !== user.id) {
+      throw new ApiError('Você não tem permissão para visualizar estas notificações.', 403);
+    }
 
-    res.json(rows);
+    const rows = await NotificationRepository.listByUser(Number(userId), sector);
+    return ApiResponse.success(res, rows);
   } catch (err) {
-    console.error('[NotificationController] Erro ao buscar:', err);
-    res.status(500).json({ error: 'Erro ao buscar notificações' });
+    next(err);
   }
 };
 
-export const markAsRead = async (req: Request, res: Response): Promise<void> => {
+export const markAsRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { userId, notificationId } = req.params;
+  const user = (req as any).user;
 
   try {
-    // Usar REPLACE INTO para MySQL para simplificar a lógica de INSERT ou UPDATE
-    await pool.query(`
-      REPLACE INTO user_notifications (user_id, notification_id, is_read, read_at)
-      VALUES (?, ?, 1, NOW())
-    `, [userId, notificationId]);
+    // Apenas o próprio usuário ou Administrador pode marcar como lida
+    if (user.role !== 'Administrador' && Number(userId) !== user.id) {
+      throw new ApiError('Você não tem permissão para esta operação.', 403);
+    }
 
-    res.json({ message: 'Notificação marcada como lida' });
+    await NotificationRepository.markAsRead(Number(userId), Number(notificationId));
+    return ApiResponse.success(res, null, 'Notificação marcada como lida');
   } catch (err) {
-    console.error('[NotificationController] Erro ao marcar como lida:', err);
-    res.status(500).json({ error: 'Erro ao marcar notificação' });
+    next(err);
   }
 };
 
@@ -51,10 +44,10 @@ export const streamNotifications = (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*'); // Garantir CORS para SSE
+  res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.flushHeaders();
 
-  const onNewNotification = (notification: any) => {
+  const onNewNotification = (notification: Notification) => {
     if (notification.sector === sector || notification.sector === 'Geral') {
       res.write(`data: ${JSON.stringify(notification)}\n\n`);
     }
@@ -62,7 +55,6 @@ export const streamNotifications = (req: Request, res: Response) => {
 
   notificationEmitter.on('new_notification', onNewNotification);
 
-  // Keep-alive ping
   const keepAlive = setInterval(() => {
     if (!res.writableEnded) {
       res.write(': keep-alive\n\n');

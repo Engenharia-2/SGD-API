@@ -1,17 +1,17 @@
 import { Router } from 'express';
 import { listUsers, authorizeUser, deleteUser } from '../controllers/adminController.js';
-import { authenticateJWT, authorizeRoles } from '../middlewares/authMiddleware.js';
+import { authenticateJWT, authorizePermission, authorizeRoles } from '../middlewares/authMiddleware.js';
 
 const router = Router();
 
-// Todas as rotas de admin exigem token e cargo de Administrador
+// Todas as rotas de admin exigem token
 router.use(authenticateJWT);
 
-// Listar e autorizar pode ser feito por Administradores e Gestores
-router.get('/users', authorizeRoles('Administrador', 'Gestor'), listUsers);
-router.patch('/users/:id/authorize', authorizeRoles('Administrador', 'Gestor'), authorizeUser);
+// Listar e autorizar exige nível de AUTORIZACAO (Administrador e Gestor)
+router.get('/users', authorizePermission('AUTORIZACAO'), listUsers);
+router.patch('/users/:id/authorize', authorizePermission('AUTORIZACAO'), authorizeUser);
 
-// Apenas Administradores podem excluir usuários
+// Apenas Administradores podem excluir usuários (Operação Crítica)
 router.delete('/users/:id', authorizeRoles('Administrador'), deleteUser);
 
 export default router;

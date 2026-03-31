@@ -1,31 +1,32 @@
-import { Request, Response } from 'express';
-import { pool } from '../config/db.js';
+import { Request, Response, NextFunction } from 'express';
+import { AdminService } from '../services/adminService.js';
+import { ApiResponse } from '../utils/apiResponse.js';
 
-export const listUsers = async (req: Request, res: Response) => {
+export const listUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [users]: any = await pool.query('SELECT id, username, sector, role, is_authorized, created_at FROM users ORDER BY is_authorized ASC, created_at DESC');
-    res.json(users);
-  } catch (err: any) {
-    res.status(500).json({ error: 'Erro ao buscar usuários' });
+    const users = await AdminService.listAllUsers();
+    return ApiResponse.success(res, users);
+  } catch (err) {
+    next(err);
   }
 };
 
-export const authorizeUser = async (req: Request, res: Response) => {
+export const authorizeUser = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
   try {
-    await pool.query('UPDATE users SET is_authorized = 1 WHERE id = ?', [id]);
-    res.json({ message: 'Usuário autorizado com sucesso' });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Erro ao autorizar usuário' });
+    await AdminService.authorizeUser(Number(id));
+    return ApiResponse.success(res, null, 'Usuário autorizado com sucesso');
+  } catch (err) {
+    next(err);
   }
 };
 
-export const deleteUser = async (req: Request, res: Response) => {
+export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
   try {
-    await pool.query('DELETE FROM users WHERE id = ?', [id]);
-    res.json({ message: 'Usuário removido/recusado' });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Erro ao remover usuário' });
+    await AdminService.deleteUser(Number(id));
+    return ApiResponse.success(res, null, 'Usuário removido/recusado');
+  } catch (err) {
+    next(err);
   }
 };

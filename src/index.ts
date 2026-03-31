@@ -42,6 +42,10 @@ app.use('/admin', adminRoutes);
 app.use('/documents', documentRoutes);
 app.use('/notifications', notificationRoutes);
 
+// Tratamento de Erros Global (DEVE vir após as rotas)
+import { errorHandler } from './middlewares/errorMiddleware.js';
+app.use(errorHandler);
+
 // Inicialização segura
 initDatabase().then(() => {
   app.listen(port, () => {
