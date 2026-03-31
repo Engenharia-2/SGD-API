@@ -10,7 +10,13 @@ export const getNotifications = async (req: Request, res: Response): Promise<voi
       SELECT n.*, IF(un.is_read IS NULL, 0, un.is_read) as is_read
       FROM notifications n
       LEFT JOIN user_notifications un ON n.id = un.notification_id AND un.user_id = ?
-      WHERE n.sector = ? OR n.sector = 'Geral'
+      WHERE (n.sector = ? OR n.sector = 'Geral')
+      AND (
+        -- Mostrar se for uma notificação geral (sem entradas em user_notifications)
+        NOT EXISTS (SELECT 1 FROM user_notifications un2 WHERE un2.notification_id = n.id)
+        -- OU se for especificamente para este usuário
+        OR un.user_id IS NOT NULL
+      )
       ORDER BY n.created_at DESC
       LIMIT 50
     `, [userId, sector]);

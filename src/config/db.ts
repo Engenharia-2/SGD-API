@@ -51,8 +51,32 @@ export async function initDatabase() {
         responsible VARCHAR(100),
         version VARCHAR(20),
         status VARCHAR(20) DEFAULT 'Revisão',
+        is_published TINYINT(1) DEFAULT 0,
         creation_date DATE,
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    const createDocumentApprovalsTable = `
+      CREATE TABLE IF NOT EXISTS document_approvals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        document_id INT NOT NULL,
+        user_id INT NOT NULL,
+        status ENUM('Pendente', 'Aprovado', 'Rejeitado') DEFAULT 'Pendente',
+        rejection_reason TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_approval (document_id, user_id)
+      );
+    `;
+
+    const createDocumentVisibilityTable = `
+      CREATE TABLE IF NOT EXISTS document_visibility (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        document_id INT NOT NULL,
+        sector_name VARCHAR(50) NOT NULL,
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
       );
     `;
 
@@ -96,6 +120,8 @@ export async function initDatabase() {
 
     await pool.query(createUsersTable);
     await pool.query(createDocsTable);
+    await pool.query(createDocumentApprovalsTable);
+    await pool.query(createDocumentVisibilityTable);
     await pool.query(createNotificationsTable);
     await pool.query(createUserNotificationsTable);
     await pool.query(createUserFavoritesTable);
@@ -113,6 +139,9 @@ export async function initDatabase() {
       }
       if (!columnNames.includes('status')) {
         await pool.query("ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'Revisão'");
+      }
+      if (!columnNames.includes('is_published')) {
+        await pool.query("ALTER TABLE documents ADD COLUMN is_published TINYINT(1) DEFAULT 0 AFTER status");
       }
       if (!columnNames.includes('creation_date')) {
         await pool.query("ALTER TABLE documents ADD COLUMN creation_date DATE");
