@@ -5,14 +5,51 @@ import { RowDataPacket } from 'mysql2';
 export class DocumentRepository {
   static async create(data: any): Promise<number> {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO documents (title, filename, original_name, mimetype, size, sector, category, responsible, version, status, is_published, creation_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO documents (doc_code, title, description, filename, original_name, mimetype, size, sector, category, responsible, version, status, is_published, creation_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        data.title, data.filename, data.original_name, data.mimetype, data.size,
+        data.doc_code || null,
+        data.title, 
+        data.description || null,
+        data.filename || null, 
+        data.original_name || null, 
+        data.mimetype || null, 
+        data.size || null,
         data.sector, data.category, data.responsible, data.version, data.status,
         0, data.creation_date, data.parent_id
       ]
     );
     return result.insertId;
+  }
+
+  static async getNextCodeNumber(prefix: string): Promise<number> {
+    // Busca o maior número após o prefixo (ex: PQS-5 -> retorna 5)
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT doc_code FROM documents WHERE doc_code LIKE ? ORDER BY CAST(SUBSTRING_INDEX(doc_code, '-', -1) AS UNSIGNED) DESC LIMIT 1",
+      [`${prefix}-%`]
+    );
+
+    if (rows.length === 0) return 1;
+    
+    const lastCode = rows[0].doc_code;
+    const parts = lastCode.split('-');
+    const lastNumber = parseInt(parts[parts.length - 1]);
+    
+    return isNaN(lastNumber) ? 1 : lastNumber + 1;
+  }
+
+  static async addFiles(docId: number, files: Express.Multer.File[]): Promise<void> {
+    if (files.length === 0) return;
+    const values = files.map(file => [
+      docId, 
+      file.filename, 
+      file.originalname, 
+      file.mimetype, 
+      file.size
+    ]);
+    await pool.query(
+      'INSERT INTO document_files (document_id, filename, original_name, mimetype, size) VALUES ?', 
+      [values]
+    );
   }
 
   static async findById(id: number): Promise<Document | null> {
@@ -42,6 +79,16 @@ export class DocumentRepository {
 
     query += ' ORDER BY d.uploaded_at DESC';
     const [docs] = await pool.query<Document[]>(query, params);
+
+    // Buscar arquivos para cada documento
+    for (const doc of docs) {
+      const [files] = await pool.query<RowDataPacket[]>(
+        'SELECT * FROM document_files WHERE document_id = ?',
+        [doc.id]
+      );
+      (doc as any).files = files;
+    }
+
     return docs;
   }
 
@@ -54,6 +101,15 @@ export class DocumentRepository {
       ORDER BY d.uploaded_at DESC
     `;
     const [docs] = await pool.query<Document[]>(query, [userId]);
+
+    for (const doc of docs) {
+      const [files] = await pool.query<RowDataPacket[]>(
+        'SELECT * FROM document_files WHERE document_id = ?',
+        [doc.id]
+      );
+      (doc as any).files = files;
+    }
+
     return docs;
   }
 
@@ -70,7 +126,16 @@ export class DocumentRepository {
       'SELECT filename FROM documents WHERE id = ? OR parent_id = ?', 
       [id, id]
     );
-    return docs.map(d => d.filename);
+    
+    const [files] = await pool.query<RowDataPacket[]>(
+      'SELECT filename FROM document_files WHERE document_id = ? OR document_id IN (SELECT id FROM documents WHERE parent_id = ?)',
+      [id, id]
+    );
+
+    const docFilenames = docs.map(d => d.filename).filter(f => f !== null);
+    const extraFilenames = files.map(f => f.filename);
+    
+    return [...new Set([...docFilenames, ...extraFilenames])];
   }
 
   // Métodos Auxiliares (Aprovações e Visibilidade)

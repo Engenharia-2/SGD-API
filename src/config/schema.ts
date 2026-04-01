@@ -13,9 +13,11 @@ export const CREATE_USERS_TABLE = `
 export const CREATE_DOCS_TABLE = `
   CREATE TABLE IF NOT EXISTS documents (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    doc_code VARCHAR(50) NULL,
     title VARCHAR(255) NOT NULL,
-    filename VARCHAR(255) NOT NULL,
-    original_name VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    filename VARCHAR(255) NULL,
+    original_name VARCHAR(255) NULL,
     mimetype VARCHAR(100),
     size INT,
     sector VARCHAR(50) NOT NULL,
@@ -27,6 +29,19 @@ export const CREATE_DOCS_TABLE = `
     creation_date DATE,
     parent_id INT NULL,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`;
+
+export const CREATE_DOCUMENT_FILES_TABLE = `
+  CREATE TABLE IF NOT EXISTS document_files (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    document_id INT NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    mimetype VARCHAR(100),
+    size INT,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
   );
 `;
 
@@ -94,6 +109,7 @@ export const CREATE_USER_FAVORITES_TABLE = `
 export const SCHEMA_QUERIES = [
   CREATE_USERS_TABLE,
   CREATE_DOCS_TABLE,
+  CREATE_DOCUMENT_FILES_TABLE,
   CREATE_DOCUMENT_APPROVALS_TABLE,
   CREATE_DOCUMENT_VISIBILITY_TABLE,
   CREATE_NOTIFICATIONS_TABLE,

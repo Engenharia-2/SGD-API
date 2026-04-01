@@ -3,14 +3,30 @@ import { DocumentService } from '../services/documentService.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
 export const uploadDocument = async (req: Request, res: Response, next: NextFunction) => {
-  if (!req.file) return ApiResponse.error(res, 'Nenhum arquivo enviado', 400);
+  const files = req.files as Express.Multer.File[];
+  if (!files || files.length === 0) return ApiResponse.error(res, 'Nenhum arquivo enviado', 400);
   
-  const { title, sector, category, responsible, version, status, creation_date, approverIds, targetSectors, parent_id } = req.body;
+  const { 
+    doc_code, 
+    title, 
+    description,
+    sector, 
+    category, 
+    responsible, 
+    version, 
+    status, 
+    creation_date, 
+    approverIds, 
+    targetSectors, 
+    parent_id 
+  } = req.body;
   const user = (req as any).user;
   
   try {
-    const newDocId = await DocumentService.uploadDocument(req.file, {
+    const newDocId = await DocumentService.uploadDocument(files, {
+      doc_code,
       title,
+      description,
       sector,
       category,
       responsible,

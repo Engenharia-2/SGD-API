@@ -47,6 +47,13 @@ async function ensureColumns() {
     const [columns]: any = await pool.query("SHOW COLUMNS FROM documents");
     const columnNames = columns.map((c: any) => c.Field);
     
+    // Quando inicializar a api no servidor remover essas condições pois todas as colunas já estarão criadas pelas CREATE TABLE
+    if (!columnNames.includes('doc_code')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN doc_code VARCHAR(50) NULL AFTER id");
+    }
+    if (!columnNames.includes('description')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN description TEXT NULL AFTER title");
+    }
     if (!columnNames.includes('responsible')) {
       await pool.query("ALTER TABLE documents ADD COLUMN responsible VARCHAR(100)");
     }

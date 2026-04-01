@@ -43,7 +43,7 @@ router.post(
   '/upload', 
   authenticateJWT, 
   authorizePermission('ESCRITA'), 
-  upload.single('file'), 
+  upload.array('files'), 
   uploadDocument
 );
 

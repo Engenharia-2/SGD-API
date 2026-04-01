@@ -15,9 +15,11 @@ export class DocumentService {
    * Faz o upload de um novo documento e inicia o processo de aprovação.
    */
   static async uploadDocument(
-    file: Express.Multer.File,
+    files: Express.Multer.File[],
     data: {
+      doc_code?: string;
       title?: string;
+      description?: string;
       sector: string;
       category: string;
       responsible?: string;
@@ -35,13 +37,32 @@ export class DocumentService {
       throw new ApiError('Você não tem permissão para enviar documentos para outro setor.', 403);
     }
 
+    let finalCode = data.doc_code;
+
+    // Se for uma nova versão, herdar o código do pai (caso não enviado)
+    if (data.parent_id && !finalCode) {
+      const parent = await DocumentRepository.findById(data.parent_id);
+      if (parent) finalCode = parent.doc_code;
+    } 
+    // Se for novo e o código enviado parecer um prefixo (sem o hífen e número no final)
+    else if (finalCode && !finalCode.includes('-')) {
+      const nextNum = await DocumentRepository.getNextCodeNumber(finalCode);
+      finalCode = `${finalCode}-${nextNum}`;
+    }
+
+    // Criar o registro principal (metadados)
+    const firstFile = files[0];
     const newDocId = await DocumentRepository.create({
       ...data,
-      filename: file.filename,
-      original_name: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size
+      doc_code: finalCode,
+      filename: firstFile.filename,
+      original_name: firstFile.originalname,
+      mimetype: firstFile.mimetype,
+      size: firstFile.size
     });
+
+    // Inserir todos os arquivos na tabela document_files
+    await DocumentRepository.addFiles(newDocId, files);
 
     // Inserir Aprovadores
     if (data.approverIds.length > 0) {
@@ -58,7 +79,7 @@ export class DocumentService {
         approverId,
         data.sector,
         'Aprovação Pendente',
-        `Você foi designado para aprovar o documento "${data.title || file.originalname}".`,
+        `Você foi designado para aprovar o documento "${data.title || firstFile.originalname}".`,
         'warning',
         newDocId
       );

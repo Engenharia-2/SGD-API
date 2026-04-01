@@ -16,7 +16,9 @@ export type DocumentStatus = 'Revisão' | 'Aprovado' | 'Obsoleto' | 'Rejeitado';
 
 export interface Document extends RowDataPacket {
   id: number;
+  doc_code?: string;
   title: string;
+  description?: string;
   filename: string;
   original_name: string;
   mimetype: string;
