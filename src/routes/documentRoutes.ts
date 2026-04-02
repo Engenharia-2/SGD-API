@@ -8,13 +8,54 @@ import {
   unfavoriteDocument,
   listFavorites,
   listPendingApprovals,
-  handleApprovalAction
+  handleApprovalAction,
+  updateDocumentStatus
 } from '../controllers/documentController.js';
+import { 
+  markAsRead, 
+  confirmReading, 
+  listPendingReadings, 
+  getReadingStats 
+} from '../controllers/documentReadingController.js';
 import { upload } from '../config/multer.js';
 import { authenticateJWT, authorizePermission, checkSector } from '../middlewares/authMiddleware.js';
 
 const router = Router();
 
+// --- Rotas de Leitura e Conformidade ---
+// Funcionário marca como lido
+router.post(
+  '/:id/read', 
+  authenticateJWT, 
+  authorizePermission('LEITURA'), 
+  markAsRead
+);
+
+// Gestor lista leituras pendentes do seu setor
+router.get(
+  '/pending-readings', 
+  authenticateJWT, 
+  authorizePermission('AUTORIZACAO'), 
+  listPendingReadings
+);
+
+// Gestor confirma leitura específica
+router.post(
+  '/confirm-reading/:readingId', 
+  authenticateJWT, 
+  authorizePermission('AUTORIZACAO'), 
+  confirmReading
+);
+
+// Gestor/Admin vê estatísticas de um documento
+router.get(
+  '/:id/reading-stats', 
+  authenticateJWT, 
+  authorizePermission('AUTORIZACAO'), 
+  getReadingStats
+);
+
+// --- Rotas de Documentos ---
 // Listagem é permitida para todos (LEITURA)
 router.get('/', authenticateJWT, authorizePermission('LEITURA'), checkSector, listDocuments);
 router.get('/favorites', authenticateJWT, authorizePermission('LEITURA'), listFavorites);

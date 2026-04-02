@@ -42,6 +42,21 @@ export interface Document extends RowDataPacket {
   }>;
 }
 
+export type DocumentReadingStatus = 'Pendente' | 'Confirmado';
+
+export interface DocumentReading extends RowDataPacket {
+  id: number;
+  document_id: number;
+  user_id: number;
+  status: DocumentReadingStatus;
+  read_at: string;
+  confirmed_by: number | null;
+  confirmed_at: string | null;
+  // Campos virtuais para JOINs
+  username?: string;
+  document_title?: string;
+}
+
 export type NotificationType = 'info' | 'success' | 'error' | 'warning';
 
 export interface Notification extends RowDataPacket {

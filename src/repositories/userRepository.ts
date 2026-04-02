@@ -33,6 +33,14 @@ export class UserRepository {
     return result.affectedRows > 0;
   }
 
+  static async findManagersBySector(sector: string): Promise<User[]> {
+    const [rows] = await pool.query<User[]>(
+      "SELECT id, username, sector, role FROM users WHERE is_authorized = 1 AND (role = 'Gestor' OR (role = 'Administrador' AND sector = ?))",
+      [sector]
+    );
+    return rows;
+  }
+
   static async delete(id: number): Promise<boolean> {
     const [result] = await pool.query<ResultSetHeader>('DELETE FROM users WHERE id = ?', [id]);
     return result.affectedRows > 0;

@@ -106,6 +106,22 @@ export const CREATE_USER_FAVORITES_TABLE = `
   );
 `;
 
+export const CREATE_DOCUMENT_READINGS_TABLE = `
+  CREATE TABLE IF NOT EXISTS document_readings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    document_id INT NOT NULL,
+    user_id INT NOT NULL,
+    status ENUM('Pendente', 'Confirmado') DEFAULT 'Pendente',
+    read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    confirmed_by INT NULL,
+    confirmed_at TIMESTAMP NULL,
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (confirmed_by) REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE KEY unique_reading (document_id, user_id)
+  );
+`;
+
 export const SCHEMA_QUERIES = [
   CREATE_USERS_TABLE,
   CREATE_DOCS_TABLE,
@@ -114,5 +130,6 @@ export const SCHEMA_QUERIES = [
   CREATE_DOCUMENT_VISIBILITY_TABLE,
   CREATE_NOTIFICATIONS_TABLE,
   CREATE_USER_NOTIFICATIONS_TABLE,
-  CREATE_USER_FAVORITES_TABLE
+  CREATE_USER_FAVORITES_TABLE,
+  CREATE_DOCUMENT_READINGS_TABLE
 ];
