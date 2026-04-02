@@ -3,7 +3,7 @@ import { Document, ResultSetHeader } from '../types/index.js';
 import { RowDataPacket } from 'mysql2';
 
 export class DocumentRepository {
-  static async create(data: any): Promise<number> {
+  static async create(data: Partial<Document>): Promise<number> {
     const [result] = await pool.query<ResultSetHeader>(
       'INSERT INTO documents (doc_code, title, description, filename, original_name, mimetype, size, sector, category, responsible, version, status, is_published, creation_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
@@ -82,11 +82,11 @@ export class DocumentRepository {
 
     // Buscar arquivos para cada documento
     for (const doc of docs) {
-      const [files] = await pool.query<RowDataPacket[]>(
+      const [files] = await pool.query<Document['files'] & RowDataPacket[]>(
         'SELECT * FROM document_files WHERE document_id = ?',
         [doc.id]
       );
-      (doc as any).files = files;
+      doc.files = files;
     }
 
     return docs;
@@ -103,11 +103,11 @@ export class DocumentRepository {
     const [docs] = await pool.query<Document[]>(query, [userId]);
 
     for (const doc of docs) {
-      const [files] = await pool.query<RowDataPacket[]>(
+      const [files] = await pool.query<Document['files'] & RowDataPacket[]>(
         'SELECT * FROM document_files WHERE document_id = ?',
         [doc.id]
       );
-      (doc as any).files = files;
+      doc.files = files;
     }
 
     return docs;

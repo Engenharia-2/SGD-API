@@ -33,6 +33,13 @@ export interface Document extends RowDataPacket {
   uploaded_at: string;
   parent_id?: number | null;
   is_favorite?: boolean;
+  files?: Array<{
+    id: number;
+    filename: string;
+    original_name: string;
+    mimetype: string;
+    size: number;
+  }>;
 }
 
 export type NotificationType = 'info' | 'success' | 'error' | 'warning';

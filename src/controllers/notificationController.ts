@@ -1,12 +1,13 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
+import { AuthRequest } from '../middlewares/authMiddleware.js';
 import { notificationEmitter } from '../config/events.js';
 import { Notification } from '../types/index.js';
 import { NotificationRepository } from '../repositories/notificationRepository.js';
 import { ApiResponse, ApiError } from '../utils/apiResponse.js';
 
-export const getNotifications = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const getNotifications = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { userId, sector } = req.params;
-  const user = (req as any).user;
+  const user = req.user!;
 
   try {
     // Apenas o próprio usuário ou Administrador pode ver estas notificações
@@ -21,9 +22,9 @@ export const getNotifications = async (req: Request, res: Response, next: NextFu
   }
 };
 
-export const markAsRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const markAsRead = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { userId, notificationId } = req.params;
-  const user = (req as any).user;
+  const user = req.user!;
 
   try {
     // Apenas o próprio usuário ou Administrador pode marcar como lida
@@ -38,7 +39,7 @@ export const markAsRead = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-export const streamNotifications = (req: Request, res: Response) => {
+export const streamNotifications = (req: AuthRequest, res: Response) => {
   const { sector } = req.params;
 
   res.setHeader('Content-Type', 'text/event-stream');

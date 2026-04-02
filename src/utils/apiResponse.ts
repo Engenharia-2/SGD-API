@@ -13,7 +13,7 @@ export class ApiResponse {
   /**
    * Envia uma resposta de sucesso padronizada.
    */
-  static success(res: Response, data: any = null, message: string = 'Success', statusCode: number = 200) {
+  static success<T>(res: Response, data: T | null = null, message: string = 'Success', statusCode: number = 200) {
     return res.status(statusCode).json({
       status: 'success',
       message,
@@ -24,7 +24,7 @@ export class ApiResponse {
   /**
    * Envia uma resposta de erro padronizada.
    */
-  static error(res: Response, message: string = 'Internal Server Error', statusCode: number = 500, errors: any = null) {
+  static error<T>(res: Response, message: string = 'Internal Server Error', statusCode: number = 500, errors: T | null = null) {
     return res.status(statusCode).json({
       status: 'error',
       message,

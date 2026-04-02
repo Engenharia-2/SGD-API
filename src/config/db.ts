@@ -1,4 +1,4 @@
-import mysql from 'mysql2/promise';
+import mysql, { RowDataPacket } from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { SCHEMA_QUERIES } from './schema.js';
 
@@ -44,8 +44,8 @@ export async function initDatabase() {
 
 async function ensureColumns() {
   try {
-    const [columns]: any = await pool.query("SHOW COLUMNS FROM documents");
-    const columnNames = columns.map((c: any) => c.Field);
+    const [columns] = await pool.query<RowDataPacket[]>("SHOW COLUMNS FROM documents");
+    const columnNames = columns.map(c => c.Field as string);
     
     // Quando inicializar a api no servidor remover essas condições pois todas as colunas já estarão criadas pelas CREATE TABLE
     if (!columnNames.includes('doc_code')) {
@@ -74,8 +74,8 @@ async function ensureColumns() {
     }
     
     // Check users table
-    const [userColumns]: any = await pool.query("SHOW COLUMNS FROM users");
-    const userColumnNames = userColumns.map((c: any) => c.Field);
+    const [userColumns] = await pool.query<RowDataPacket[]>("SHOW COLUMNS FROM users");
+    const userColumnNames = userColumns.map(c => c.Field as string);
     if (!userColumnNames.includes('is_authorized')) {
       await pool.query("ALTER TABLE users ADD COLUMN is_authorized TINYINT(1) DEFAULT 0 AFTER role");
     }
