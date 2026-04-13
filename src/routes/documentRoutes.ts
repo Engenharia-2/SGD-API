@@ -3,7 +3,6 @@ import {
   uploadDocument, 
   listDocuments, 
   deleteDocument, 
-  updateDocumentStatus,
   favoriteDocument,
   unfavoriteDocument,
   listFavorites,
@@ -15,7 +14,8 @@ import {
   markAsRead, 
   confirmReading, 
   listPendingReadings, 
-  getReadingStats 
+  getReadingStats,
+  listMyPendingReadings
 } from '../controllers/documentReadingController.js';
 import { upload } from '../config/multer.js';
 import { authenticateJWT, authorizePermission, checkSector } from '../middlewares/authMiddleware.js';
@@ -23,6 +23,14 @@ import { authenticateJWT, authorizePermission, checkSector } from '../middleware
 const router = Router();
 
 // --- Rotas de Leitura e Conformidade ---
+// Funcionário lista o que ele ainda não leu
+router.get(
+  '/my-pending-readings',
+  authenticateJWT,
+  authorizePermission('LEITURA'),
+  listMyPendingReadings
+);
+
 // Funcionário marca como lido
 router.post(
   '/:id/read', 

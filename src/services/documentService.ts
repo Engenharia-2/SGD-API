@@ -2,9 +2,14 @@ import { NotificationService } from './notificationService.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { Document, User } from '../types/index.js';
+import { Document, User, DocumentStatus } from '../types/index.js';
 import { DocumentRepository } from '../repositories/documentRepository.js';
+import { UserRepository } from '../repositories/userRepository.js';
 import { ApiError } from '../utils/apiResponse.js';
+import { pool } from '../config/db.js';
+
+import { DocumentMapper } from '../utils/documentMapper.js';
+import { DocumentPolicy } from '../policies/documentPolicy.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,6 +18,7 @@ const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 export class DocumentService {
   /**
    * Faz o upload de um novo documento e inicia o processo de aprovação.
+   * Utiliza transação para garantir integridade dos dados (Metadados + Arquivos + Aprovadores + Visibilidade).
    */
   static async uploadDocument(
     files: Express.Multer.File[],
@@ -24,7 +30,7 @@ export class DocumentService {
       category: string;
       responsible?: string;
       version?: string;
-      status?: string;
+      status?: DocumentStatus;
       creation_date?: string;
       approverIds: number[];
       targetSectors: string[];
@@ -32,60 +38,93 @@ export class DocumentService {
     },
     user: { id: number, sector: string, role: string }
   ): Promise<number> {
-    // Verificar se o setor do documento bate com o do usuário (ou se é Admin)
-    if (user.role !== 'Administrador' && data.sector !== user.sector) {
-      throw new ApiError('Você não tem permissão para enviar documentos para outro setor.', 403);
-    }
+    // 1. Validação de Política
+    DocumentPolicy.canUpload(user, data.sector);
 
     let finalCode = data.doc_code;
+    let fileMetadata = {
+      filename: '',
+      original_name: '',
+      mimetype: '',
+      size: 0
+    };
 
-    // Se for uma nova versão, herdar o código do pai (caso não enviado)
-    if (data.parent_id && !finalCode) {
+    // Se houver arquivos novos, pega os dados do primeiro
+    if (files && files.length > 0) {
+      fileMetadata = {
+        filename: files[0].filename,
+        original_name: files[0].originalname,
+        mimetype: files[0].mimetype,
+        size: files[0].size
+      };
+    }
+
+    // Se for uma nova versão, herdar dados do pai se necessário
+    if (data.parent_id) {
       const parent = await DocumentRepository.findById(data.parent_id);
-      if (parent) finalCode = parent.doc_code;
-    } 
-    // Se for novo e o código enviado parecer um prefixo (sem o hífen e número no final)
-    else if (finalCode && !finalCode.includes('-')) {
+      if (parent) {
+        if (!finalCode) finalCode = parent.doc_code;
+        if (!files || files.length === 0) {
+          fileMetadata = {
+            filename: parent.filename,
+            original_name: parent.original_name,
+            mimetype: parent.mimetype,
+            size: parent.size
+          };
+        }
+      }
+    } else if (finalCode && !finalCode.includes('-')) {
       const nextNum = await DocumentRepository.getNextCodeNumber(finalCode);
       finalCode = `${finalCode}-${nextNum}`;
     }
 
-    // Criar o registro principal (metadados)
-    const firstFile = files[0];
-    const newDocId = await DocumentRepository.create({
-      ...data,
-      doc_code: finalCode,
-      filename: firstFile.filename,
-      original_name: firstFile.originalname,
-      mimetype: firstFile.mimetype,
-      size: firstFile.size
-    });
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
 
-    // Inserir todos os arquivos na tabela document_files
-    await DocumentRepository.addFiles(newDocId, files);
+    try {
+      // 2. Criar o registro principal (metadados)
+      const newDocId = await DocumentRepository.create({
+        ...data,
+        doc_code: finalCode,
+        ...fileMetadata
+      }, connection);
 
-    // Inserir Aprovadores
-    if (data.approverIds.length > 0) {
-      await DocumentRepository.addApprovers(newDocId, data.approverIds);
+      // 3. Inserir todos os arquivos na tabela document_files
+      if (files && files.length > 0) {
+        await DocumentRepository.addFiles(newDocId, files, connection);
+      }
+
+      // 4. Inserir Aprovadores
+      if (data.approverIds.length > 0) {
+        await DocumentRepository.addApprovers(newDocId, data.approverIds, connection);
+      }
+
+      // 5. Inserir Visibilidade
+      const sectors = data.targetSectors.length > 0 ? data.targetSectors : [data.sector];
+      await DocumentRepository.addVisibility(newDocId, sectors, connection);
+
+      await connection.commit();
+
+      // Notificações (fora da transação para não travar o banco com chamadas externas/IO)
+      const notificationTitle = data.title || fileMetadata.original_name || 'Novo Documento';
+      for (const approverId of data.approverIds) {
+        await NotificationService.notifyUser(
+          approverId,
+          data.sector,
+          'Aprovação Pendente',
+          `Você foi designado para aprovar o documento "${notificationTitle}".`,
+          'warning',
+          newDocId
+        );
+      }
+
+      return newDocId;
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
     }
-
-    // Inserir Visibilidade
-    const sectors = data.targetSectors.length > 0 ? data.targetSectors : [data.sector];
-    await DocumentRepository.addVisibility(newDocId, sectors);
-
-    // Notificações
-    for (const approverId of data.approverIds) {
-      await NotificationService.notifyUser(
-        approverId,
-        data.sector,
-        'Aprovação Pendente',
-        `Você foi designado para aprovar o documento "${data.title || firstFile.originalname}".`,
-        'warning',
-        newDocId
-      );
-    }
-
-    return newDocId;
   }
 
   /**
@@ -93,24 +132,7 @@ export class DocumentService {
    */
   static async listDocuments(userId: number, filters: { sector?: string; category?: string }): Promise<Document[]> {
     const docs = await DocumentRepository.listPublished(userId, filters);
-
-    const groupedDocs: Document[] = [];
-    const rootMap = new Map<number, Document & { history: Document[] }>();
-
-    docs.forEach((doc) => {
-      const rootId = doc.parent_id || doc.id;
-      const formattedDoc = { ...doc, is_favorite: !!doc.is_favorite };
-      
-      if (!rootMap.has(rootId)) {
-        const docWithHistory = { ...formattedDoc, history: [] };
-        rootMap.set(rootId, docWithHistory);
-        groupedDocs.push(docWithHistory as unknown as Document);
-      }
-      
-      rootMap.get(rootId)?.history.push(formattedDoc as Document);
-    });
-
-    return groupedDocs;
+    return DocumentMapper.toHistoryGroup(docs);
   }
 
   /**
@@ -120,25 +142,36 @@ export class DocumentService {
     const doc = await DocumentRepository.findById(docId);
     if (!doc) throw new ApiError('Documento não encontrado', 404);
 
-    // Gestores e Funcionários só aprovam documentos de seus setores (ou visibilidade)
-    // Para simplificar, vamos garantir que o documento pertença ao setor ou tenha visibilidade para ele
-    if (userRole !== 'Administrador' && doc.sector !== userSector) {
-      const visibility = await DocumentRepository.getVisibilitySectors(docId);
-      if (!visibility.includes(userSector)) {
-        throw new ApiError('Você não tem permissão para aprovar documentos de outro setor.', 403);
-      }
-    }
+    const visibilitySectors = await DocumentRepository.getVisibilitySectors(docId);
+    DocumentPolicy.canApprove({ id: userId, sector: userSector, role: userRole }, doc, visibilitySectors);
 
     await DocumentRepository.updateApprovalStatus(docId, userId, action, reason);
 
     if (action === 'Rejeitado') {
-      await NotificationService.notifySector(
-        doc.sector,
-        'Documento Rejeitado',
-        `Seu documento "${doc.title}" foi rejeitado. Motivo: ${reason}`,
-        'error',
-        docId
-      );
+      let targetUserId: number | null = null;
+      if (doc.responsible) {
+        const creator = await UserRepository.findByUsername(doc.responsible);
+        if (creator) targetUserId = creator.id;
+      }
+
+      if (targetUserId) {
+        await NotificationService.notifyUser(
+          targetUserId,
+          doc.sector,
+          'Documento Rejeitado',
+          `Seu documento "${doc.title}" foi rejeitado. Motivo: ${reason}`,
+          'error',
+          docId
+        );
+      } else {
+        await NotificationService.notifySector(
+          doc.sector,
+          'Documento Rejeitado',
+          `O documento "${doc.title}" (Responsável: ${doc.responsible || 'N/A'}) foi rejeitado. Motivo: ${reason}`,
+          'error',
+          docId
+        );
+      }
     } else {
       const pendingCount = await DocumentRepository.getPendingApprovalsCount(docId);
 
@@ -166,9 +199,8 @@ export class DocumentService {
     const doc = await DocumentRepository.findById(docId);
     if (!doc) throw new ApiError('Documento não encontrado', 404);
 
-    if (userRole !== 'Administrador' && doc.sector !== userSector) {
-      throw new ApiError('Você não tem permissão para excluir documentos de outro setor.', 403);
-    }
+    // Validação via Policy (Apenas Admin ou Gestor do setor)
+    DocumentPolicy.canManage({ id: 0, sector: userSector, role: userRole }, doc);
 
     const filenames = await DocumentRepository.getFilenamesToDelete(docId);
     
@@ -205,9 +237,8 @@ export class DocumentService {
     const doc = await DocumentRepository.findById(docId);
     if (!doc) throw new ApiError('Documento não encontrado', 404);
 
-    if (userRole !== 'Administrador' && doc.sector !== userSector) {
-      throw new ApiError('Você não tem permissão para alterar documentos de outro setor.', 403);
-    }
+    // Validação via Policy (Apenas Admin ou Gestor do setor)
+    DocumentPolicy.canManage({ id: 0, sector: userSector, role: userRole }, doc);
 
     await DocumentRepository.updateStatus(docId, status, doc.is_published ? 1 : 0);
 

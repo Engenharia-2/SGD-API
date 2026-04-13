@@ -3,9 +3,16 @@ import { DocumentRepository } from '../repositories/documentRepository.js';
 import { UserRepository } from '../repositories/userRepository.js';
 import { NotificationService } from './notificationService.js';
 import { ApiError } from '../utils/apiResponse.js';
-import { DocumentReading } from '../types/index.js';
+import { DocumentReading, Document } from '../types/index.js';
 
 export class DocumentReadingService {
+  /**
+   * Lista documentos que o usuário logado ainda não leu.
+   */
+  static async getMyPendingReadings(userId: number, userSector: string): Promise<Document[]> {
+    return await DocumentReadingRepository.listMyPending(userId, userSector);
+  }
+
   /**
    * Registra a leitura de um documento por um funcionário.
    */

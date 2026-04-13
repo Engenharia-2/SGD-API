@@ -1,6 +1,7 @@
 import { pool } from '../config/db.js';
-import { DocumentReading, ResultSetHeader } from '../types/index.js';
+import { DocumentReading, ResultSetHeader, Document } from '../types/index.js';
 import { RowDataPacket } from 'mysql2';
+import { DocumentRepository } from './documentRepository.js';
 
 export class DocumentReadingRepository {
   /**
@@ -12,6 +13,28 @@ export class DocumentReadingRepository {
       [documentId, userId]
     );
     return result.insertId;
+  }
+
+  /**
+   * Busca documentos que o usuário logado ainda não leu, mas que pertencem ao seu setor
+   * ou possuem visibilidade para ele.
+   */
+  static async listMyPending(userId: number, userSector: string): Promise<Document[]> {
+    const query = `
+      SELECT DISTINCT d.* 
+      FROM documents d
+      LEFT JOIN document_visibility dv ON d.id = dv.document_id
+      WHERE d.is_published = 1
+      AND (d.sector = ? OR dv.sector_name = ?)
+      AND d.id NOT IN (
+        SELECT document_id 
+        FROM document_readings 
+        WHERE user_id = ? AND status = 'Confirmado'
+      )
+      ORDER BY d.uploaded_at DESC
+    `;
+    const [rows] = await pool.query<Document[]>(query, [userSector, userSector, userId]);
+    return await DocumentRepository.attachFiles(rows);
   }
 
   /**
@@ -67,19 +90,19 @@ export class DocumentReadingRepository {
     read: DocumentReading[],
     missing: Array<{ id: number, username: string }>
   }> {
-    // 1. Quem leu (Pendente ou Confirmado)
+    // 1. Quem leu (Pendente ou Confirmado) - Apenas usuários com role 'Funcionario'
     const [readRows] = await pool.query<DocumentReading[]>(`
       SELECT dr.*, u.username
       FROM document_readings dr
       JOIN users u ON dr.user_id = u.id
-      WHERE dr.document_id = ? AND u.sector = ?
+      WHERE dr.document_id = ? AND u.sector = ? AND u.role = 'Funcionario'
     `, [documentId, sector]);
 
-    // 2. Quem falta (Usuários ativos do setor que não estão na lista acima)
+    // 2. Quem falta (Usuários ativos do setor com role 'Funcionario' que não estão na lista acima)
     const [missingRows] = await pool.query<RowDataPacket[]>(`
       SELECT id, username 
       FROM users 
-      WHERE sector = ? AND is_authorized = 1 AND id NOT IN (
+      WHERE sector = ? AND is_authorized = 1 AND role = 'Funcionario' AND id NOT IN (
         SELECT user_id FROM document_readings WHERE document_id = ?
       )
     `, [sector, documentId]);

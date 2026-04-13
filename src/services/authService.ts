@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { User } from '../types/index.js';
+import { User, UserBase } from '../types/index.js';
 import { UserRepository } from '../repositories/userRepository.js';
 import { ApiError } from '../utils/apiResponse.js';
 
@@ -20,7 +20,7 @@ export class AuthService {
   /**
    * Registra um novo usuário no sistema com senha criptografada.
    */
-  static async register(userData: Partial<User> & { password?: string }): Promise<void> {
+  static async register(userData: Partial<UserBase> & { password?: string }): Promise<void> {
     const existing = await UserRepository.findByUsername(userData.username || '');
     if (existing) {
       throw new ApiError('Usuário já existe', 400);

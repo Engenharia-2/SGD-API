@@ -1,5 +1,5 @@
 import { pool } from '../config/db.js';
-import { User, ResultSetHeader } from '../types/index.js';
+import { User, UserBase, ResultSetHeader } from '../types/index.js';
 
 export class UserRepository {
   static async findById(id: number): Promise<User | null> {
@@ -19,7 +19,7 @@ export class UserRepository {
     return rows;
   }
 
-  static async create(userData: Partial<User> & { password?: string }): Promise<number> {
+  static async create(userData: Partial<UserBase> & { password?: string }): Promise<number> {
     const { username, password, sector, role } = userData;
     const [result] = await pool.query<ResultSetHeader>(
       'INSERT INTO users (username, password, sector, role, is_authorized) VALUES (?, ?, ?, ?, 0)',

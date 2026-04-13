@@ -2,7 +2,7 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 export type UserRole = 'Administrador' | 'Gestor' | 'Funcionario';
 
-export interface User extends RowDataPacket {
+export interface UserBase {
   id: number;
   username: string;
   password?: string;
@@ -12,9 +12,11 @@ export interface User extends RowDataPacket {
   created_at: string;
 }
 
+export interface User extends UserBase, RowDataPacket {}
+
 export type DocumentStatus = 'Revisão' | 'Aprovado' | 'Obsoleto' | 'Rejeitado';
 
-export interface Document extends RowDataPacket {
+export interface DocumentBase {
   id: number;
   doc_code?: string;
   title: string;
@@ -33,6 +35,7 @@ export interface Document extends RowDataPacket {
   uploaded_at: string;
   parent_id?: number | null;
   is_favorite?: boolean;
+  user_reading_status?: 'Pendente' | 'Confirmado' | null;
   files?: Array<{
     id: number;
     filename: string;
@@ -42,9 +45,11 @@ export interface Document extends RowDataPacket {
   }>;
 }
 
+export interface Document extends DocumentBase, RowDataPacket {}
+
 export type DocumentReadingStatus = 'Pendente' | 'Confirmado';
 
-export interface DocumentReading extends RowDataPacket {
+export interface DocumentReadingBase {
   id: number;
   document_id: number;
   user_id: number;
@@ -57,9 +62,11 @@ export interface DocumentReading extends RowDataPacket {
   document_title?: string;
 }
 
+export interface DocumentReading extends DocumentReadingBase, RowDataPacket {}
+
 export type NotificationType = 'info' | 'success' | 'error' | 'warning';
 
-export interface Notification extends RowDataPacket {
+export interface NotificationBase {
   id: number;
   title: string;
   message: string;
@@ -70,5 +77,7 @@ export interface Notification extends RowDataPacket {
   created_at: string;
   target_user_id?: number | null;
 }
+
+export interface Notification extends NotificationBase, RowDataPacket {}
 
 export { ResultSetHeader };

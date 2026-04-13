@@ -15,8 +15,8 @@ export const getNotifications = async (req: AuthRequest, res: Response, next: Ne
       throw new ApiError('Você não tem permissão para visualizar estas notificações.', 403);
     }
 
-    const rows = await NotificationRepository.listByUser(Number(userId), sector);
-    return ApiResponse.success(res, rows);
+    const rows = await NotificationRepository.listByUser(Number(userId), sector as string);
+    ApiResponse.success(res, rows);
   } catch (err) {
     next(err);
   }
@@ -33,7 +33,7 @@ export const markAsRead = async (req: AuthRequest, res: Response, next: NextFunc
     }
 
     await NotificationRepository.markAsRead(Number(userId), Number(notificationId));
-    return ApiResponse.success(res, null, 'Notificação marcada como lida');
+    ApiResponse.success(res, null, 'Notificação marcada como lida');
   } catch (err) {
     next(err);
   }

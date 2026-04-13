@@ -77,15 +77,17 @@ export const authorizeRoles = (...allowedRoles: UserRole[]) => {
 };
 
 /**
- * Middleware para validar se o usuário pertence ao setor ou é Administrador.
+ * Middleware para validar se o usuário pertence ao setor ou tem permissão de Gestor para navegar.
+ * Regra: Gestores podem navegar entre setores, Administradores e Funcionários são restritos ao seu setor.
  */
 export const checkSector = (req: AuthRequest, res: Response, next: NextFunction) => {
   if (!req.user) return ApiResponse.error(res, 'Não autenticado.', 401);
   
   const targetSector = req.params.sector || req.query.sector || req.body.sector;
   
-  if (req.user.role !== 'Administrador' && targetSector && req.user.sector !== targetSector) {
-    return ApiResponse.error(res, 'Acesso negado. Você não pertence a este setor.', 403);
+  // Se o usuário NÃO for Gestor E houver um setor alvo diferente do setor do usuário, bloqueia.
+  if (req.user.role !== 'Gestor' && targetSector && req.user.sector !== targetSector) {
+    return ApiResponse.error(res, 'Acesso negado. Você não tem permissão para visualizar outros setores.', 403);
   }
   
   next();
