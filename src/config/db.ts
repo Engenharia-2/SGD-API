@@ -79,6 +79,15 @@ async function ensureColumns() {
     if (!userColumnNames.includes('is_authorized')) {
       await pool.query("ALTER TABLE users ADD COLUMN is_authorized TINYINT(1) DEFAULT 0 AFTER role");
     }
+
+    // Ensure Indexes for existing tables
+    await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_sector (sector)");
+    await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_category (category)");
+    await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_published (is_published)");
+    await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_status (status)");
+    await pool.query("ALTER TABLE document_visibility ADD INDEX IF NOT EXISTS idx_dv_sector (sector_name)");
+    await pool.query("ALTER TABLE notifications ADD INDEX IF NOT EXISTS idx_notif_sector (sector)");
+
   } catch (err) {
     console.warn('Aviso ao validar colunas do banco:', err);
   }

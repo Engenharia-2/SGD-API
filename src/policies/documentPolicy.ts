@@ -39,7 +39,7 @@ export class DocumentPolicy {
    * Verifica se o usuário pode aprovar um documento.
    */
   static canApprove(user: UserAuth, doc: DocumentAuth, visibilitySectors: string[]): void {
-    if (user.role === 'Administrador') return;
+    if (user.role === 'Administrador' || user.role === 'Gestor') return;
     
     const belongsToSector = doc.sector === user.sector;
     const hasVisibility = visibilitySectors.includes(user.sector);

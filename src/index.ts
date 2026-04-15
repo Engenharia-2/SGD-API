@@ -10,6 +10,7 @@ import authRoutes from './routes/authRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import documentCodeRoutes from './routes/documentCodeRoutes.js';
 
 dotenv.config();
 
@@ -41,6 +42,7 @@ app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/documents', documentRoutes);
 app.use('/notifications', notificationRoutes);
+app.use('/document-codes', documentCodeRoutes);
 
 // Tratamento de Erros Global (DEVE vir após as rotas)
 import { errorHandler } from './middlewares/errorMiddleware.js';

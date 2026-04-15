@@ -104,7 +104,7 @@ export class DocumentRepository {
     `;
     const params: (string | number)[] = [userId, userId];
 
-    if (filters.sector) {
+    if (filters.sector && filters.sector !== 'Geral') {
       query += ' AND (d.sector = ? OR dv.sector_name = ?)';
       params.push(filters.sector, filters.sector);
     }
