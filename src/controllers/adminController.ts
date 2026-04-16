@@ -30,3 +30,14 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
     next(err);
   }
 };
+
+export const resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { id } = req.params;
+  const { newPassword } = req.body;
+  try {
+    await AdminService.resetPassword(Number(id), newPassword);
+    ApiResponse.success(res, null, 'Senha redefinida com sucesso');
+  } catch (err) {
+    next(err);
+  }
+};

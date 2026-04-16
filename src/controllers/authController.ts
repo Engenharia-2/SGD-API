@@ -21,3 +21,14 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     next(err);
   }
 };
+
+export const changePassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = (req as any).user.id;
+    const { currentPassword, newPassword } = req.body;
+    await AuthService.changePassword(userId, currentPassword, newPassword);
+    ApiResponse.success(res, null, 'Senha alterada com sucesso');
+  } catch (err) {
+    next(err);
+  }
+};

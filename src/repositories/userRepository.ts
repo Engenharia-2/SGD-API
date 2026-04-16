@@ -45,4 +45,12 @@ export class UserRepository {
     const [result] = await pool.query<ResultSetHeader>('DELETE FROM users WHERE id = ?', [id]);
     return result.affectedRows > 0;
   }
+
+  static async updatePassword(id: number, hashedPassword: string): Promise<boolean> {
+    const [result] = await pool.query<ResultSetHeader>(
+      'UPDATE users SET password = ? WHERE id = ?',
+      [hashedPassword, id]
+    );
+    return result.affectedRows > 0;
+  }
 }

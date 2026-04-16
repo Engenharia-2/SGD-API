@@ -68,4 +68,26 @@ export class AuthService {
       }
     };
   }
+
+  /**
+   * Altera a senha do usuário autenticado.
+   */
+  static async changePassword(userId: number, currentPassword?: string, newPassword?: string): Promise<void> {
+    if (!currentPassword || !newPassword) {
+      throw new ApiError('Senha atual e nova senha são obrigatórias', 400);
+    }
+
+    const user = await UserRepository.findById(userId);
+    if (!user) {
+      throw new ApiError('Usuário não encontrado', 404);
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password || '');
+    if (!isMatch) {
+      throw new ApiError('Senha atual incorreta', 401);
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await UserRepository.updatePassword(userId, hashedPassword);
+  }
 }
