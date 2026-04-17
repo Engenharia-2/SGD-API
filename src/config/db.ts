@@ -72,6 +72,12 @@ async function ensureColumns() {
     if (!columnNames.includes('parent_id')) {
       await pool.query("ALTER TABLE documents ADD COLUMN parent_id INT NULL");
     }
+    if (!columnNames.includes('revision_period_years')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN revision_period_years INT DEFAULT 0 AFTER responsible");
+    }
+    if (!columnNames.includes('next_revision_date')) {
+      await pool.query("ALTER TABLE documents ADD COLUMN next_revision_date DATE NULL AFTER revision_period_years");
+    }
     
     // Check users table
     const [userColumns] = await pool.query<RowDataPacket[]>("SHOW COLUMNS FROM users");

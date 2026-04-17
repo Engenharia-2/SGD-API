@@ -11,6 +11,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import documentCodeRoutes from './routes/documentCodeRoutes.js';
+import { SchedulerService } from './services/schedulerService.js';
 
 dotenv.config();
 
@@ -52,5 +53,6 @@ app.use(errorHandler);
 initDatabase().then(() => {
   app.listen(port, () => {
     console.log(`[server]: API rodando em http://localhost:${port}`);
+    SchedulerService.init();
   });
 });

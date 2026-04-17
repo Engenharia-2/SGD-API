@@ -14,7 +14,7 @@ export interface UserBase {
 
 export interface User extends UserBase, RowDataPacket {}
 
-export type DocumentStatus = 'Revisão' | 'Aprovado' | 'Obsoleto' | 'Rejeitado';
+export type DocumentStatus = 'Revisão' | 'Aprovado' | 'Obsoleto' | 'Rejeitado' | 'Exclusão';
 
 export interface DocumentBase {
   id: number;
@@ -28,6 +28,8 @@ export interface DocumentBase {
   sector: string;
   category: string;
   responsible: string;
+  revision_period_years: number;
+  next_revision_date: string | null;
   version: string;
   status: DocumentStatus;
   is_published: boolean;

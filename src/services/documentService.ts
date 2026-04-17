@@ -29,6 +29,7 @@ export class DocumentService {
       sector: string;
       category: string;
       responsible?: string;
+      revision_period_years?: number;
       version?: string;
       status?: DocumentStatus;
       creation_date?: string;
@@ -42,6 +43,15 @@ export class DocumentService {
     DocumentPolicy.canUpload(user, data.sector);
 
     let finalCode = data.doc_code;
+    let nextRevisionDate: string | null = null;
+
+    // Calcular data da próxima revisão se houver periodicidade
+    if (data.revision_period_years && data.revision_period_years > 0) {
+      const date = new Date();
+      date.setFullYear(date.getFullYear() + Number(data.revision_period_years));
+      nextRevisionDate = date.toISOString().split('T')[0];
+    }
+
     let fileMetadata = {
       filename: '',
       original_name: '',
@@ -86,6 +96,7 @@ export class DocumentService {
       const newDocId = await DocumentRepository.create({
         ...data,
         doc_code: finalCode,
+        next_revision_date: nextRevisionDate,
         ...fileMetadata
       }, connection);
 
@@ -148,6 +159,11 @@ export class DocumentService {
     await DocumentRepository.updateApprovalStatus(docId, userId, action, reason);
 
     if (action === 'Rejeitado') {
+      if (doc.status === 'Exclusão') {
+        // Se a exclusão foi rejeitada, volta ao status publicado
+        await DocumentRepository.updateStatus(docId, 'Aprovado', 1);
+      }
+
       let targetUserId: number | null = null;
       if (doc.responsible) {
         const creator = await UserRepository.findByUsername(doc.responsible);
@@ -158,16 +174,10 @@ export class DocumentService {
         await NotificationService.notifyUser(
           targetUserId,
           doc.sector,
-          'Documento Rejeitado',
-          `Seu documento "${doc.title}" foi rejeitado. Motivo: ${reason}`,
-          'error',
-          docId
-        );
-      } else {
-        await NotificationService.notifySector(
-          doc.sector,
-          'Documento Rejeitado',
-          `O documento "${doc.title}" (Responsável: ${doc.responsible || 'N/A'}) foi rejeitado. Motivo: ${reason}`,
+          doc.status === 'Exclusão' ? 'Exclusão Cancelada' : 'Documento Rejeitado',
+          doc.status === 'Exclusão' 
+            ? `A solicitação de exclusão do documento "${doc.title}" foi rejeitada.`
+            : `Seu documento "${doc.title}" foi rejeitado. Motivo: ${reason}`,
           'error',
           docId
         );
@@ -176,6 +186,12 @@ export class DocumentService {
       const pendingCount = await DocumentRepository.getPendingApprovalsCount(docId);
 
       if (pendingCount === 0) {
+        if (doc.status === 'Exclusão') {
+          // Se era um processo de exclusão e todos aprovaram, deleta fisicamente
+          await this.executePhysicalDeletion(docId);
+          return;
+        }
+
         await DocumentRepository.updateStatus(docId, 'Aprovado', 1);
 
         const sectors = await DocumentRepository.getVisibilitySectors(docId);
@@ -193,15 +209,49 @@ export class DocumentService {
   }
 
   /**
-   * Exclui um documento e seus arquivos relacionados.
+   * Solicita a exclusão de um documento (Envia para aprovação do responsável).
    */
   static async deleteDocument(docId: number, userSector: string, userRole: string): Promise<void> {
     const doc = await DocumentRepository.findById(docId);
     if (!doc) throw new ApiError('Documento não encontrado', 404);
 
-    // Validação via Policy (Apenas Admin ou Gestor do setor)
+    // Validação via Policy (Apenas Admin ou Gestor do setor pode solicitar)
     DocumentPolicy.canManage({ id: 0, sector: userSector, role: userRole }, doc);
 
+    // Se já estiver em processo de exclusão, não faz nada
+    if (doc.status === 'Exclusão') {
+      throw new ApiError('Este documento já possui uma solicitação de exclusão pendente.', 400);
+    }
+
+    // 1. Alterar status para 'Exclusão' e retirar visibilidade pública imediata
+    await DocumentRepository.updateStatus(docId, 'Exclusão', 0);
+
+    // 2. Identificar o criador/responsável para ser o aprovador da exclusão
+    const creator = await UserRepository.findByUsername(doc.responsible);
+    if (!creator) {
+      // Se não houver responsável válido, deleta direto (fallback de segurança)
+      await this.executePhysicalDeletion(docId);
+      return;
+    }
+
+    // 3. Adicionar o criador como o aprovador necessário para a exclusão
+    await DocumentRepository.addApprovers(docId, [creator.id]);
+
+    // 4. Notificar o criador
+    await NotificationService.notifyUser(
+      creator.id,
+      doc.sector,
+      'Solicitação de Exclusão',
+      `Foi solicitada a exclusão do documento "${doc.title}". Você, como responsável, precisa autorizar esta ação.`,
+      'warning',
+      docId
+    );
+  }
+
+  /**
+   * Executa a remoção real do disco e do banco de dados.
+   */
+  private static async executePhysicalDeletion(docId: number): Promise<void> {
     const filenames = await DocumentRepository.getFilenamesToDelete(docId);
     
     for (const filename of filenames) {

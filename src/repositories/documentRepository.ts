@@ -14,7 +14,7 @@ export class DocumentRepository {
   }
 
   static async create(data: Partial<DocumentBase>, connection?: PoolConnection): Promise<number> {
-    const query = 'INSERT INTO documents (doc_code, title, description, filename, original_name, mimetype, size, sector, category, responsible, version, status, is_published, creation_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+    const query = 'INSERT INTO documents (doc_code, title, description, filename, original_name, mimetype, size, sector, category, responsible, revision_period_years, next_revision_date, version, status, is_published, creation_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
     const params = [
       data.doc_code || null,
       data.title, 
@@ -23,8 +23,16 @@ export class DocumentRepository {
       data.original_name || null, 
       data.mimetype || null, 
       data.size || null,
-      data.sector, data.category, data.responsible, data.version, data.status,
-      0, data.creation_date, data.parent_id
+      data.sector, 
+      data.category, 
+      data.responsible,
+      data.revision_period_years || 0,
+      data.next_revision_date || null,
+      data.version, 
+      data.status,
+      0, 
+      data.creation_date, 
+      data.parent_id
     ];
     
     const [result] = await this.execute(query, params, connection) as [ResultSetHeader, any];
@@ -210,5 +218,22 @@ export class DocumentRepository {
 
   static async removeFavorite(userId: number, docId: number): Promise<void> {
     await pool.query('DELETE FROM user_favorites WHERE user_id = ? AND document_id = ?', [userId, docId]);
+  }
+
+  /**
+   * Busca documentos que precisam ser revisados hoje.
+   */
+  static async findDocumentsForRevisionToday(): Promise<Document[]> {
+    const [rows] = await pool.query<Document[]>(
+      'SELECT * FROM documents WHERE next_revision_date = CURRENT_DATE'
+    );
+    return rows;
+  }
+
+  /**
+   * Atualiza a data da próxima revisão após o envio da notificação (ou após revisão).
+   */
+  static async updateNextRevisionDate(id: number, nextDate: string): Promise<void> {
+    await pool.query('UPDATE documents SET next_revision_date = ? WHERE id = ?', [nextDate, id]);
   }
 }

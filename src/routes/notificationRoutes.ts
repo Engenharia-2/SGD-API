@@ -10,6 +10,6 @@ router.get('/stream/:sector', streamNotifications);
 
 // Rotas autenticadas
 router.get('/:userId/:sector', authenticateJWT, checkSector, getNotifications);
-router.post('/read/:userId/:notificationId', authenticateJWT, markAsRead);
+router.patch('/:notificationId/read', authenticateJWT, markAsRead);
 
 export default router;

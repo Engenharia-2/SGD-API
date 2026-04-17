@@ -23,16 +23,20 @@ export const getNotifications = async (req: AuthRequest, res: Response, next: Ne
 };
 
 export const markAsRead = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-  const { userId, notificationId } = req.params;
+  const { notificationId } = req.params;
+  const { userId: bodyUserId } = req.body;
   const user = req.user!;
 
   try {
+    // Se o body não vier com userId, usamos o ID do usuário logado do token
+    const userId = bodyUserId ? Number(bodyUserId) : user.id;
+
     // Apenas o próprio usuário ou Administrador pode marcar como lida
-    if (user.role !== 'Administrador' && Number(userId) !== user.id) {
+    if (user.role !== 'Administrador' && userId !== user.id) {
       throw new ApiError('Você não tem permissão para esta operação.', 403);
     }
 
-    await NotificationRepository.markAsRead(Number(userId), Number(notificationId));
+    await NotificationRepository.markAsRead(userId, Number(notificationId));
     ApiResponse.success(res, null, 'Notificação marcada como lida');
   } catch (err) {
     next(err);

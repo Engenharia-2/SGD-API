@@ -23,6 +23,8 @@ export const CREATE_DOCS_TABLE = `
     sector VARCHAR(50) NOT NULL,
     category VARCHAR(20) NOT NULL,
     responsible VARCHAR(100),
+    revision_period_years INT DEFAULT 0,
+    next_revision_date DATE NULL,
     version VARCHAR(20),
     status VARCHAR(20) DEFAULT 'Revisão',
     is_published TINYINT(1) DEFAULT 0,
@@ -75,9 +77,11 @@ export const CREATE_NOTIFICATIONS_TABLE = `
     message TEXT NOT NULL,
     sector VARCHAR(50) NOT NULL,
     document_id INT,
+    target_user_id INT NULL,
     type VARCHAR(50) DEFAULT 'info',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL
+    FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL,
+    FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `;
 
