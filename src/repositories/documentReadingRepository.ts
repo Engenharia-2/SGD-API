@@ -16,6 +16,21 @@ export class DocumentReadingRepository {
   }
 
   /**
+   * Registra múltiplas intenções de leitura de uma vez.
+   */
+  static async addBatch(documentId: number, userIds: number[], connection?: any): Promise<void> {
+    if (userIds.length === 0) return;
+    const values = userIds.map(userId => [documentId, userId, 'Pendente']);
+    const query = 'INSERT IGNORE INTO document_readings (document_id, user_id, status) VALUES ?';
+    
+    if (connection) {
+      await connection.query(query, [values]);
+    } else {
+      await pool.query(query, [values]);
+    }
+  }
+
+  /**
    * Busca documentos que o usuário logado ainda não leu, mas que pertencem ao seu setor
    * ou possuem visibilidade para ele.
    */

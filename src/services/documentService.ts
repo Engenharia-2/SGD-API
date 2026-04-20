@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { Document, User, DocumentStatus } from '../types/index.js';
 import { DocumentRepository } from '../repositories/documentRepository.js';
 import { UserRepository } from '../repositories/userRepository.js';
+import { DocumentReadingRepository } from '../repositories/documentReadingRepository.js';
 import { ApiError } from '../utils/apiResponse.js';
 import { pool } from '../config/db.js';
 
@@ -91,12 +92,18 @@ export class DocumentService {
     const connection = await pool.getConnection();
     await connection.beginTransaction();
 
+    const isRelatorio = data.category === 'RELATORIOS';
+    const initialStatus = isRelatorio ? 'Aprovado' : (data.status || 'Revisão');
+    const isPublished = isRelatorio ? 1 : 0;
+
     try {
       // 2. Criar o registro principal (metadados)
       const newDocId = await DocumentRepository.create({
         ...data,
         doc_code: finalCode,
         next_revision_date: nextRevisionDate,
+        status: initialStatus as DocumentStatus,
+        is_published: isPublished as any, // Cast for compatibility
         ...fileMetadata
       }, connection);
 
@@ -105,9 +112,16 @@ export class DocumentService {
         await DocumentRepository.addFiles(newDocId, files, connection);
       }
 
-      // 4. Inserir Aprovadores
-      if (data.approverIds.length > 0) {
-        await DocumentRepository.addApprovers(newDocId, data.approverIds, connection);
+      if (isRelatorio) {
+        // Se for relatório, registramos como leitura obrigatória para os usuários selecionados
+        if (data.approverIds.length > 0) {
+          await DocumentReadingRepository.addBatch(newDocId, data.approverIds, connection);
+        }
+      } else {
+        // 4. Inserir Aprovadores (Apenas para fluxos normais)
+        if (data.approverIds.length > 0) {
+          await DocumentRepository.addApprovers(newDocId, data.approverIds, connection);
+        }
       }
 
       // 5. Inserir Visibilidade
@@ -116,17 +130,32 @@ export class DocumentService {
 
       await connection.commit();
 
-      // Notificações (fora da transação para não travar o banco com chamadas externas/IO)
+      // Notificações
       const notificationTitle = data.title || fileMetadata.original_name || 'Novo Documento';
-      for (const approverId of data.approverIds) {
-        await NotificationService.notifyUser(
-          approverId,
-          data.sector,
-          'Aprovação Pendente',
-          `Você foi designado para aprovar o documento "${notificationTitle}".`,
-          'warning',
-          newDocId
-        );
+      if (isRelatorio) {
+        // Notificar sobre leitura obrigatória
+        for (const readerId of data.approverIds) {
+          await NotificationService.notifyUser(
+            readerId,
+            data.sector,
+            'Leitura Necessária',
+            `Um novo relatório "${notificationTitle}" foi publicado e requer sua leitura obrigatória.`,
+            'info',
+            newDocId
+          );
+        }
+      } else {
+        // Notificar sobre aprovação pendente
+        for (const approverId of data.approverIds) {
+          await NotificationService.notifyUser(
+            approverId,
+            data.sector,
+            'Aprovação Pendente',
+            `Você foi designado para aprovar o documento "${notificationTitle}".`,
+            'warning',
+            newDocId
+          );
+        }
       }
 
       return newDocId;

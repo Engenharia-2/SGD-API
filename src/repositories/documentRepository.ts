@@ -14,6 +14,7 @@ export class DocumentRepository {
   }
 
   static async create(data: Partial<DocumentBase>, connection?: PoolConnection): Promise<number> {
+    console.log('[RepoDebug] Criando documento no banco. is_published:', data.is_published);
     const query = 'INSERT INTO documents (doc_code, title, description, filename, original_name, mimetype, size, sector, category, responsible, revision_period_years, next_revision_date, version, status, is_published, creation_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
     const params = [
       data.doc_code || null,
@@ -30,7 +31,7 @@ export class DocumentRepository {
       data.next_revision_date || null,
       data.version, 
       data.status,
-      0, 
+      data.is_published ?? 0, 
       data.creation_date, 
       data.parent_id
     ];
