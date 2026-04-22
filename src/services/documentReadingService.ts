@@ -9,8 +9,8 @@ export class DocumentReadingService {
   /**
    * Lista documentos que o usuário logado ainda não leu.
    */
-  static async getMyPendingReadings(userId: number, userSector: string): Promise<Document[]> {
-    return await DocumentReadingRepository.listMyPending(userId, userSector);
+  static async getMyPendingReadings(userId: number, userSector: string, userRole: string): Promise<Document[]> {
+    return await DocumentReadingRepository.listMyPending(userId, userSector, userRole);
   }
 
   /**
@@ -22,24 +22,47 @@ export class DocumentReadingService {
     if (!doc.is_published) throw new ApiError('Este documento ainda não foi publicado para leitura.', 400);
 
     const existing = await DocumentReadingRepository.findByUserAndDocument(userId, documentId);
-    if (existing) throw new ApiError('Você já marcou este documento como lido.', 400);
+    
+    // Se já existir um registro e ele já foi lido/confirmado, bloqueia
+    if (existing && existing.status !== 'Pendente') {
+      throw new ApiError('Você já marcou este documento como lido.', 400);
+    }
 
     const user = await UserRepository.findById(userId);
     if (!user) throw new ApiError('Usuário não encontrado.', 404);
 
-    await DocumentReadingRepository.create(documentId, userId);
+    const isManagerOrAdmin = user.role === 'Gestor' || user.role === 'Administrador';
 
-    // Notificar Gestores do Setor sobre a nova leitura pendente de confirmação
-    const sectorManagers = await UserRepository.findManagersBySector(user.sector);
-    for (const manager of sectorManagers) {
-      await NotificationService.notifyUser(
-        manager.id,
-        user.sector,
-        'Confirmação de Leitura Pendente',
-        `O funcionário ${user.username} marcou o documento "${doc.title}" como lido.`,
-        'info',
-        documentId
-      );
+    // Se não existir o registro (leitura voluntária), cria.
+    // Se for Gestor/Admin, já nasce como 'Confirmado'. Se for funcionário, nasce como 'Lido'.
+    if (!existing) {
+      if (isManagerOrAdmin) {
+        await DocumentReadingRepository.createConfirmed(documentId, userId);
+      } else {
+        await DocumentReadingRepository.create(documentId, userId);
+      }
+    } else {
+      // Se já existir (leitura obrigatória pendente)
+      if (isManagerOrAdmin) {
+        await DocumentReadingRepository.markAsConfirmed(documentId, userId);
+      } else {
+        await DocumentReadingRepository.markAsRead(documentId, userId);
+      }
+    }
+
+    // Apenas notifica gestores se a leitura ainda precisar de confirmação (for de um funcionário)
+    if (!isManagerOrAdmin) {
+      const sectorManagers = await UserRepository.findManagersBySector(user.sector);
+      for (const manager of sectorManagers) {
+        await NotificationService.notifyUser(
+          manager.id,
+          user.sector,
+          'Confirmação de Leitura Pendente',
+          `O funcionário ${user.username} marcou o documento "${doc.title}" como lido.`,
+          'info',
+          documentId
+        );
+      }
     }
   }
 

@@ -6,7 +6,7 @@ import { ApiResponse } from '../utils/apiResponse.js';
 export const listMyPendingReadings = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const user = req.user!;
   try {
-    const docs = await DocumentReadingService.getMyPendingReadings(user.id, user.sector);
+    const docs = await DocumentReadingService.getMyPendingReadings(user.id, user.sector, user.role);
     ApiResponse.success(res, docs);
   } catch (err) {
     next(err);

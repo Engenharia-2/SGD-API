@@ -37,7 +37,7 @@ export interface DocumentBase {
   uploaded_at: string;
   parent_id?: number | null;
   is_favorite?: boolean;
-  user_reading_status?: 'Pendente' | 'Confirmado' | null;
+  user_reading_status?: 'Pendente' | 'Lido' | 'Confirmado' | null;
   files?: Array<{
     id: number;
     filename: string;
@@ -49,7 +49,7 @@ export interface DocumentBase {
 
 export interface Document extends DocumentBase, RowDataPacket {}
 
-export type DocumentReadingStatus = 'Pendente' | 'Confirmado';
+export type DocumentReadingStatus = 'Pendente' | 'Lido' | 'Confirmado';
 
 export interface DocumentReadingBase {
   id: number;

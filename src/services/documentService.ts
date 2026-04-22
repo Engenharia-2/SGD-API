@@ -35,6 +35,7 @@ export class DocumentService {
       status?: DocumentStatus;
       creation_date?: string;
       approverIds: number[];
+      readerIds?: number[];
       targetSectors: string[];
       parent_id?: number;
     },
@@ -122,6 +123,11 @@ export class DocumentService {
         if (data.approverIds.length > 0) {
           await DocumentRepository.addApprovers(newDocId, data.approverIds, connection);
         }
+
+        // Se houver leitores opcionais (ex: Atas), registrar na tabela de leitura
+        if (data.readerIds && data.readerIds.length > 0) {
+          await DocumentReadingRepository.addBatch(newDocId, data.readerIds, connection);
+        }
       }
 
       // 5. Inserir Visibilidade
@@ -133,7 +139,7 @@ export class DocumentService {
       // Notificações
       const notificationTitle = data.title || fileMetadata.original_name || 'Novo Documento';
       if (isRelatorio) {
-        // Notificar sobre leitura obrigatória
+        // Notificar sobre leitura obrigatória imediata para relatórios
         for (const readerId of data.approverIds) {
           await NotificationService.notifyUser(
             readerId,
@@ -145,7 +151,7 @@ export class DocumentService {
           );
         }
       } else {
-        // Notificar sobre aprovação pendente
+        // Notificar sobre aprovação pendente para fluxos normais
         for (const approverId of data.approverIds) {
           await NotificationService.notifyUser(
             approverId,
@@ -230,6 +236,20 @@ export class DocumentService {
             'Novo Documento Publicado',
             `O documento "${doc.title}" foi aprovado e já está disponível para o setor ${s}.`,
             'success',
+            docId
+          );
+        }
+
+        // --- Lógica de Leitura Obrigatória ---
+        // Notificar leitores obrigatórios vinculados a este documento (ex: para Atas que acabaram de ser aprovadas)
+        const readers = await DocumentReadingRepository.findPendingByDocument(docId);
+        for (const reader of readers) {
+          await NotificationService.notifyUser(
+            reader.user_id,
+            doc.sector,
+            'Leitura Necessária',
+            `O documento "${doc.title}" foi aprovado e requer sua leitura obrigatória.`,
+            'info',
             docId
           );
         }

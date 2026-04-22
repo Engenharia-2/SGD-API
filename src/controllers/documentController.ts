@@ -17,6 +17,7 @@ export const uploadDocument = async (req: AuthRequest, res: Response, next: Next
     status, 
     creation_date, 
     approverIds, 
+    readerIds,
     targetSectors, 
     parent_id 
   } = req.body;
@@ -42,6 +43,7 @@ export const uploadDocument = async (req: AuthRequest, res: Response, next: Next
       status,
       creation_date,
       approverIds: Array.isArray(approverIds) ? approverIds : (approverIds ? JSON.parse(approverIds) : []),
+      readerIds: Array.isArray(readerIds) ? readerIds : (readerIds ? JSON.parse(readerIds) : []),
       targetSectors: Array.isArray(targetSectors) ? targetSectors : (targetSectors ? JSON.parse(targetSectors) : []),
       parent_id: parent_id ? Number(parent_id) : undefined
     }, user);

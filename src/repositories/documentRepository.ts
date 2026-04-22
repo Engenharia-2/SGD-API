@@ -109,13 +109,22 @@ export class DocumentRepository {
       (SELECT status FROM document_readings WHERE user_id = ? AND document_id = d.id LIMIT 1) as user_reading_status
       FROM documents d 
       LEFT JOIN document_visibility dv ON d.id = dv.document_id
+      LEFT JOIN document_readings dr_manual ON d.id = dr_manual.document_id AND dr_manual.user_id = ?
       WHERE d.is_published = 1
     `;
-    const params: (string | number)[] = [userId, userId];
+    const params: (string | number)[] = [userId, userId, userId];
 
     if (filters.sector && filters.sector !== 'Geral') {
-      query += ' AND (d.sector = ? OR dv.sector_name = ?)';
-      params.push(filters.sector, filters.sector);
+      // Se houver filtro de setor, mostramos se: 
+      // 1. O documento é do setor 
+      // 2. O setor tem visibilidade
+      // 3. O usuário logado foi designado como leitor (independente do setor do documento)
+      query += ` AND (
+        d.sector = ? 
+        OR dv.sector_name = ? 
+        OR (dr_manual.user_id = ? AND dr_manual.status = 'Pendente')
+      )`;
+      params.push(filters.sector, filters.sector, userId);
     }
 
     if (filters.category) {

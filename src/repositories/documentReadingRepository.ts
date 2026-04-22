@@ -9,10 +9,40 @@ export class DocumentReadingRepository {
    */
   static async create(documentId: number, userId: number): Promise<number> {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT IGNORE INTO document_readings (document_id, user_id) VALUES (?, ?)',
+      'INSERT IGNORE INTO document_readings (document_id, user_id, status, read_at) VALUES (?, ?, "Lido", NOW())',
       [documentId, userId]
     );
     return result.insertId;
+  }
+
+  /**
+   * Registra uma nova leitura já confirmada (Ação de Gestor/Admin).
+   */
+  static async createConfirmed(documentId: number, userId: number): Promise<void> {
+    await pool.query(
+      'INSERT IGNORE INTO document_readings (document_id, user_id, status, read_at, confirmed_by, confirmed_at) VALUES (?, ?, "Confirmado", NOW(), ?, NOW())',
+      [documentId, userId, userId]
+    );
+  }
+
+  /**
+   * Marca um registro existente como já confirmado (Ação de Gestor/Admin).
+   */
+  static async markAsConfirmed(documentId: number, userId: number): Promise<void> {
+    await pool.query(
+      'UPDATE document_readings SET status = "Confirmado", read_at = NOW(), confirmed_by = ?, confirmed_at = NOW() WHERE document_id = ? AND user_id = ?',
+      [userId, documentId, userId]
+    );
+  }
+
+  /**
+   * Marca um registro de leitura obrigatória existente como 'Lido'.
+   */
+  static async markAsRead(documentId: number, userId: number): Promise<void> {
+    await pool.query(
+      'UPDATE document_readings SET status = "Lido", read_at = NOW() WHERE document_id = ? AND user_id = ?',
+      [documentId, userId]
+    );
   }
 
   /**
@@ -31,24 +61,42 @@ export class DocumentReadingRepository {
   }
 
   /**
-   * Busca documentos que o usuário logado ainda não leu, mas que pertencem ao seu setor
-   * ou possuem visibilidade para ele.
+   * Busca todas as leituras pendentes vinculadas a um documento específico.
    */
-  static async listMyPending(userId: number, userSector: string): Promise<Document[]> {
+  static async findPendingByDocument(documentId: number): Promise<DocumentReading[]> {
+    const [rows] = await pool.query<DocumentReading[]>(
+      'SELECT * FROM document_readings WHERE document_id = ? AND status = "Pendente"',
+      [documentId]
+    );
+    return rows;
+  }
+
+  /**
+   * Busca documentos que o usuário logado ainda não leu.
+   */
+  static async listMyPending(userId: number, userSector: string, userRole: string): Promise<Document[]> {
     const query = `
       SELECT DISTINCT d.* 
       FROM documents d
       LEFT JOIN document_visibility dv ON d.id = dv.document_id
+      LEFT JOIN document_readings dr_manual ON d.id = dr_manual.document_id AND dr_manual.user_id = ?
       WHERE d.is_published = 1
-      AND (d.sector = ? OR dv.sector_name = ?)
+      AND (
+        -- Para qualquer cargo: mostra se foi designado nominalmente e ainda não leu
+        (dr_manual.user_id = ? AND dr_manual.status = 'Pendente')
+        OR (
+          -- Apenas para Funcionários: mostra tudo do setor ou com visibilidade, exceto o que já leu/confirmou
+          ? = 'Funcionario' AND (d.sector = ? OR dv.sector_name = ?)
+        )
+      )
       AND d.id NOT IN (
         SELECT document_id 
         FROM document_readings 
-        WHERE user_id = ? AND status = 'Confirmado'
+        WHERE user_id = ? AND status IN ('Lido', 'Confirmado')
       )
       ORDER BY d.uploaded_at DESC
     `;
-    const [rows] = await pool.query<Document[]>(query, [userSector, userSector, userId]);
+    const [rows] = await pool.query<Document[]>(query, [userId, userId, userRole, userSector, userSector, userId]);
     return await DocumentRepository.attachFiles(rows);
   }
 
@@ -64,8 +112,7 @@ export class DocumentReadingRepository {
   }
 
   /**
-   * Lista todas as leituras pendentes de confirmação.
-   * Se o setor for fornecido, filtra por ele. Caso contrário (para Admins), traz tudo.
+   * Lista todas as leituras que aguardam confirmação do gestor.
    */
   static async listPending(sector?: string): Promise<DocumentReading[]> {
     let query = `
@@ -73,7 +120,7 @@ export class DocumentReadingRepository {
       FROM document_readings dr
       JOIN users u ON dr.user_id = u.id
       JOIN documents d ON dr.document_id = d.id
-      WHERE dr.status = 'Pendente'
+      WHERE dr.status = 'Lido'
     `;
     const params: string[] = [];
 
@@ -99,26 +146,26 @@ export class DocumentReadingRepository {
 
   /**
    * Busca estatísticas de leitura para um documento específico dentro de um setor.
-   * Retorna quem leu e quem ainda falta ler.
    */
   static async getReadingStats(documentId: number, sector: string): Promise<{
     read: DocumentReading[],
     missing: Array<{ id: number, username: string }>
   }> {
-    // 1. Quem leu (Pendente ou Confirmado) - Apenas usuários com role 'Funcionario'
+    // 1. Quem leu (Lido ou Confirmado)
     const [readRows] = await pool.query<DocumentReading[]>(`
       SELECT dr.*, u.username
       FROM document_readings dr
       JOIN users u ON dr.user_id = u.id
       WHERE dr.document_id = ? AND u.sector = ? AND u.role = 'Funcionario'
+      AND dr.status IN ('Lido', 'Confirmado')
     `, [documentId, sector]);
 
-    // 2. Quem falta (Usuários ativos do setor com role 'Funcionario' que não estão na lista acima)
+    // 2. Quem falta
     const [missingRows] = await pool.query<RowDataPacket[]>(`
       SELECT id, username 
       FROM users 
       WHERE sector = ? AND is_authorized = 1 AND role = 'Funcionario' AND id NOT IN (
-        SELECT user_id FROM document_readings WHERE document_id = ?
+        SELECT user_id FROM document_readings WHERE document_id = ? AND status IN ('Lido', 'Confirmado')
       )
     `, [sector, documentId]);
 
