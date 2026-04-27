@@ -1,17 +1,19 @@
-import { Request, Response, NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
+import { AuthRequest } from '../middlewares/authMiddleware.js';
 import { AdminService } from '../services/adminService.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
-export const listUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const listUsers = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const user = req.user!;
   try {
-    const users = await AdminService.listAllUsers();
+    const users = await AdminService.listAllUsers(user.role, user.sector);
     ApiResponse.success(res, users);
   } catch (err) {
     next(err);
   }
 };
 
-export const authorizeUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const authorizeUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { id } = req.params;
   try {
     await AdminService.authorizeUser(Number(id));
@@ -21,7 +23,7 @@ export const authorizeUser = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const deleteUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const deleteUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { id } = req.params;
   try {
     await AdminService.deleteUser(Number(id));
@@ -31,7 +33,7 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-export const resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const resetPassword = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const { id } = req.params;
   const { newPassword } = req.body;
   try {

@@ -316,6 +316,20 @@ export class DocumentService {
   }
 
   /**
+   * Lista todos os usuários autorizados do sistema sem filtro de setor.
+   */
+  static async listAllUsersGlobal(): Promise<User[]> {
+    return await UserRepository.listAllGlobal();
+  }
+
+  /**
+   * Lista usuários que podem aprovar documentos (Gestores e Admins autorizados).
+   */
+  static async listAvailableApprovers(): Promise<User[]> {
+    return await UserRepository.listAvailableApprovers();
+  }
+
+  /**
    * Lista aprovações pendentes para um usuário específico.
    */
   static async listPendingApprovals(userId: number): Promise<Document[]> {

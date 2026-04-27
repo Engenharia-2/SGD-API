@@ -5,6 +5,8 @@ import { ApiResponse } from '../utils/apiResponse.js';
 
 export const uploadDocument = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const files = req.files as Express.Multer.File[];
+  const user = req.user!;
+
   const { 
     doc_code, 
     title, 
@@ -27,8 +29,6 @@ export const uploadDocument = async (req: AuthRequest, res: Response, next: Next
     ApiResponse.error(res, 'Nenhum arquivo enviado', 400);
     return;
   }
-  
-  const user = req.user!;
   
   try {
     const newDocId = await DocumentService.uploadDocument(files, {
@@ -64,6 +64,24 @@ export const listDocuments = async (req: AuthRequest, res: Response, next: NextF
       category: category as string
     });
     ApiResponse.success(res, groupedDocs);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const listAllUsersGlobal = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const users = await DocumentService.listAllUsersGlobal();
+    ApiResponse.success(res, users);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const listAvailableApprovers = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const users = await DocumentService.listAvailableApprovers();
+    ApiResponse.success(res, users);
   } catch (err) {
     next(err);
   }

@@ -83,17 +83,39 @@ export class DocumentReadingService {
 
   /**
    * Lista leituras pendentes para o setor do administrador logado.
-   * Se for Gestor global, traz tudo. Se for Administrador, filtra pelo setor.
+   * Administradores e Gestores agora têm visão global das pendências para evitar "registros fantasmas".
    */
   static async listPendingReadings(sector: string, role: string): Promise<DocumentReading[]> {
-    const filterBySector = role === 'Gestor' ? undefined : sector;
+    // Se for Admin ou Gestor, não filtra por setor para garantir que nada seja perdido
+    const filterBySector = (role === 'Gestor' || role === 'Administrador') ? undefined : sector;
     return await DocumentReadingRepository.listPending(filterBySector);
   }
 
   /**
    * Busca as estatísticas de conformidade (Quem leu e quem falta).
    */
-  static async getReadingStats(documentId: number, sector: string) {
+  static async getReadingStats(documentId: number, sector?: string) {
     return await DocumentReadingRepository.getReadingStats(documentId, sector);
+  }
+
+  /**
+   * Busca conformidade por usuário (Visão detalhada do colaborador).
+   */
+  static async getUserCompliance(userId: number): Promise<any> {
+    return await DocumentReadingRepository.getUserReadingCompliance(userId);
+  }
+
+  /**
+   * Busca conformidade por norma (Adesão de todos os funcionários).
+   */
+  static async getNormCompliance(documentId: number, sector?: string): Promise<any> {
+    return await DocumentReadingRepository.getNormCompliance(documentId, sector);
+  }
+
+  /**
+   * Lista colaboradores para auditoria.
+   */
+  static async listCollaborators(sector?: string): Promise<any[]> {
+    return await UserRepository.listAll(sector, 'Funcionario');
   }
 }

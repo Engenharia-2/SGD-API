@@ -52,8 +52,55 @@ export const getReadingStats = async (req: AuthRequest, res: Response, next: Nex
   const admin = req.user!;
 
   try {
-    const stats = await DocumentReadingService.getReadingStats(Number(documentId), admin.sector);
+    // Gestores vêem estatísticas globais, Administradores vêem apenas seu setor
+    const sectorFilter = admin.role === 'Gestor' ? undefined : admin.sector;
+    const stats = await DocumentReadingService.getReadingStats(Number(documentId), sectorFilter);
     ApiResponse.success(res, stats);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getComplianceByUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const { userId } = req.params;
+  try {
+    const compliance = await DocumentReadingService.getUserCompliance(Number(userId));
+    ApiResponse.success(res, compliance);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getMyCompliance = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const user = req.user!;
+  try {
+    const compliance = await DocumentReadingService.getUserCompliance(user.id);
+    ApiResponse.success(res, compliance);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getComplianceByNorm = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const { documentId } = req.params;
+  const admin = req.user!;
+  try {
+    // Gestores vêem tudo, Admins vêem apenas seu setor
+    const sectorFilter = admin.role === 'Gestor' ? undefined : admin.sector;
+    const compliance = await DocumentReadingService.getNormCompliance(Number(documentId), sectorFilter);
+    ApiResponse.success(res, compliance);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const listCollaborators = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  const admin = req.user!;
+  try {
+    // Gestores vêem todos, Admins vêem apenas seu setor
+    const sectorFilter = admin.role === 'Gestor' ? undefined : admin.sector;
+    const users = await DocumentReadingService.listCollaborators(sectorFilter);
+    ApiResponse.success(res, users);
   } catch (err) {
     next(err);
   }

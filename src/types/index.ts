@@ -82,4 +82,24 @@ export interface NotificationBase {
 
 export interface Notification extends NotificationBase, RowDataPacket {}
 
+export interface UserComplianceItem extends RowDataPacket {
+  id: number;
+  title: string;
+  doc_code: string;
+  category: string;
+  sector: string;
+  status: DocumentReadingStatus;
+  read_at: string | null;
+  confirmed_at: string | null;
+}
+
+export interface NormComplianceResult extends RowDataPacket {
+  user_id: number;
+  username: string;
+  sector: string;
+  status: DocumentReadingStatus | null;
+  read_at: string | null;
+  confirmed_at: string | null;
+}
+
 export { ResultSetHeader };

@@ -5,10 +5,12 @@ import bcrypt from 'bcryptjs';
 
 export class AdminService {
   /**
-   * Lista todos os usuários do sistema.
+   * Lista usuários do sistema com base na permissão do solicitante.
+   * Gestores veem tudo, Administradores veem apenas o seu setor.
    */
-  static async listAllUsers(): Promise<User[]> {
-    return await UserRepository.listAll();
+  static async listAllUsers(role: string, sector: string): Promise<User[]> {
+    const sectorFilter = role === 'Gestor' ? undefined : sector;
+    return await UserRepository.listAll(sectorFilter);
   }
 
   /**

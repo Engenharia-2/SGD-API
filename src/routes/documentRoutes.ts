@@ -8,14 +8,20 @@ import {
   listFavorites,
   listPendingApprovals,
   handleApprovalAction,
-  updateDocumentStatus
+  updateDocumentStatus,
+  listAvailableApprovers,
+  listAllUsersGlobal
 } from '../controllers/documentController.js';
 import { 
   markAsRead, 
   confirmReading, 
   listPendingReadings, 
   getReadingStats,
-  listMyPendingReadings
+  listMyPendingReadings,
+  listCollaborators,
+  getComplianceByUser,
+  getComplianceByNorm,
+  getMyCompliance
 } from '../controllers/documentReadingController.js';
 import { upload } from '../config/multer.js';
 import { authenticateJWT, authorizePermission, checkSector } from '../middlewares/authMiddleware.js';
@@ -29,6 +35,14 @@ router.get(
   authenticateJWT,
   authorizePermission('LEITURA'),
   listMyPendingReadings
+);
+
+// Funcionário vê seu próprio histórico de conformidade
+router.get(
+  '/compliance/my-history',
+  authenticateJWT,
+  authorizePermission('LEITURA'),
+  getMyCompliance
 );
 
 // Funcionário marca como lido
@@ -63,9 +77,33 @@ router.get(
   getReadingStats
 );
 
+// --- Rotas de Auditoria de Treinamento/Normas ---
+router.get(
+  '/compliance/collaborators', 
+  authenticateJWT, 
+  authorizePermission('AUTORIZACAO'), 
+  listCollaborators
+);
+
+router.get(
+  '/compliance/user/:userId', 
+  authenticateJWT, 
+  authorizePermission('AUTORIZACAO'), 
+  getComplianceByUser
+);
+
+router.get(
+  '/compliance/norm/:documentId', 
+  authenticateJWT, 
+  authorizePermission('AUTORIZACAO'), 
+  getComplianceByNorm
+);
+
 // --- Rotas de Documentos ---
 // Listagem é permitida para todos (LEITURA)
 router.get('/', authenticateJWT, authorizePermission('LEITURA'), checkSector, listDocuments);
+router.get('/users/global', authenticateJWT, authorizePermission('LEITURA'), listAllUsersGlobal);
+router.get('/approvers', authenticateJWT, authorizePermission('LEITURA'), listAvailableApprovers);
 router.get('/favorites', authenticateJWT, authorizePermission('LEITURA'), listFavorites);
 
 // Aprovações exigem nível de AUTORIZACAO e setor correto

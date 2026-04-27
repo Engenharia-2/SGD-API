@@ -86,6 +86,29 @@ async function ensureColumns() {
       await pool.query("ALTER TABLE users ADD COLUMN is_authorized TINYINT(1) DEFAULT 0 AFTER role");
     }
 
+    // --- Início das Migrações para document_readings ---
+    const [readColumns] = await pool.query<RowDataPacket[]>("SHOW COLUMNS FROM document_readings");
+    const readColumnNames = readColumns.map(c => c.Field as string);
+    const statusCol = readColumns.find(c => c.Field === 'status');
+    const readAtCol = readColumns.find(c => c.Field === 'read_at');
+
+    // Se o status não for um ENUM ou não tiver valor padrão correto, aplica o MODIFY
+    if (statusCol && !statusCol.Type.includes('enum')) {
+      console.log('[Migração] Alterando document_readings.status para ENUM...');
+      await pool.query("ALTER TABLE document_readings MODIFY COLUMN status ENUM('Pendente', 'Lido', 'Confirmado') DEFAULT 'Pendente'");
+    }
+
+    // Se o read_at não aceitar NULL ou tiver configuração errada
+    if (readAtCol && readAtCol.Null === 'NO') {
+      console.log('[Migração] Permitindo NULL em document_readings.read_at...');
+      await pool.query("ALTER TABLE document_readings MODIFY COLUMN read_at TIMESTAMP NULL");
+    }
+
+    // Limpeza de registros "sujos" que ficaram vazios
+    console.log('[Migração] Limpando registros de leitura com status vazio...');
+    await pool.query("UPDATE document_readings SET status = 'Lido' WHERE (status = '' OR status IS NULL) AND read_at IS NOT NULL");
+    await pool.query("UPDATE document_readings SET status = 'Pendente' WHERE (status = '' OR status IS NULL) AND read_at IS NULL");
+
     // Ensure Indexes for existing tables
     await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_sector (sector)");
     await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_category (category)");
