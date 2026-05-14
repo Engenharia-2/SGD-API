@@ -5,12 +5,23 @@ export interface DocumentCode extends RowDataPacket {
   id: number;
   prefix: string;
   description: string;
+  pages: string[] | string;
   created_at: string;
 }
 
 export class DocumentCodeRepository {
-  static async findAll(): Promise<DocumentCode[]> {
-    const [rows] = await pool.query<DocumentCode[]>('SELECT * FROM document_codes ORDER BY prefix ASC');
+  static async findAll(page?: string): Promise<DocumentCode[]> {
+    let query = 'SELECT * FROM document_codes';
+    const params: any[] = [];
+
+    if (page) {
+      query += " WHERE JSON_CONTAINS(pages, JSON_QUOTE(?))";
+      params.push(page);
+    }
+
+    query += ' ORDER BY prefix ASC';
+    
+    const [rows] = await pool.query<DocumentCode[]>(query, params);
     return rows;
   }
 
@@ -24,18 +35,18 @@ export class DocumentCodeRepository {
     return rows.length > 0 ? rows[0] : null;
   }
 
-  static async create(prefix: string, description: string): Promise<number> {
+  static async create(prefix: string, description: string, pages: string[]): Promise<number> {
     const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO document_codes (prefix, description) VALUES (?, ?)',
-      [prefix.toUpperCase(), description]
+      'INSERT INTO document_codes (prefix, description, pages) VALUES (?, ?, ?)',
+      [prefix.toUpperCase(), description, JSON.stringify(pages)]
     );
     return result.insertId;
   }
 
-  static async update(id: number, prefix: string, description: string): Promise<void> {
+  static async update(id: number, prefix: string, description: string, pages: string[]): Promise<void> {
     await pool.query(
-      'UPDATE document_codes SET prefix = ?, description = ? WHERE id = ?',
-      [prefix.toUpperCase(), description, id]
+      'UPDATE document_codes SET prefix = ?, description = ?, pages = ? WHERE id = ?',
+      [prefix.toUpperCase(), description, JSON.stringify(pages), id]
     );
   }
 

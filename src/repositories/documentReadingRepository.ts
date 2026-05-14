@@ -113,6 +113,17 @@ export class DocumentReadingRepository {
   }
 
   /**
+   * Busca um registro de leitura pelo seu ID.
+   */
+  static async findById(id: number): Promise<DocumentReading | null> {
+    const [rows] = await pool.query<DocumentReading[]>(
+      'SELECT * FROM document_readings WHERE id = ?',
+      [id]
+    );
+    return rows[0] || null;
+  }
+
+  /**
    * Lista todas as leituras que aguardam confirmação do gestor.
    * Agora inclui fallback para capturar registros que por ventura ficaram com status vazio.
    */

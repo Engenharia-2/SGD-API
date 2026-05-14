@@ -13,7 +13,23 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import documentCodeRoutes from './routes/documentCodeRoutes.js';
 import { SchedulerService } from './services/schedulerService.js';
 
-dotenv.config();
+dotenv.config({ path: path.join(process.cwd(), '.env') });
+
+// Verificação de Variáveis de Ambiente Obrigatórias
+const REQUIRED_ENV = ['JWT_SECRET', 'DB_HOST', 'DB_USER', 'DB_PASS', 'DB_NAME'];
+const missingEnv = REQUIRED_ENV.filter(key => {
+  const value = process.env[key];
+  // DB_PASS pode ser uma string vazia em ambiente local (ex: XAMPP root sem senha)
+  if (key === 'DB_PASS') {
+    return typeof value === 'undefined';
+  }
+  return !value;
+});
+
+if (missingEnv.length > 0) {
+  console.error(`[ERRO CRÍTICO]: Variáveis de ambiente faltando: ${missingEnv.join(', ')}`);
+  process.exit(1);
+}
 
 const app: Express = express();
 const port = process.env.PORT || 3003;

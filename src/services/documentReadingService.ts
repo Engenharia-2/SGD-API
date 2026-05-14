@@ -75,22 +75,29 @@ export class DocumentReadingService {
       throw new ApiError('Você não tem permissão para confirmar leituras.', 403);
     }
 
-    // Nota: Em um sistema mais rigoroso, validaríamos se o admin pertence ao mesmo setor que o registro
-    // Mas o middleware de rota já deve cuidar de parte dessa proteção.
-    
+    // Validação de setor para Administradores
+    if (adminRole === 'Administrador') {
+      const reading = await DocumentReadingRepository.findById(readingId);
+      if (!reading) throw new ApiError('Registro de leitura não encontrado.', 404);
+
+      const targetUser = await UserRepository.findById(reading.user_id);
+      if (targetUser && targetUser.sector !== adminSector) {
+        throw new ApiError('Administradores só podem confirmar leituras do seu próprio setor.', 403);
+      }
+    }
+
     await DocumentReadingRepository.confirm(readingId, adminId);
   }
 
   /**
    * Lista leituras pendentes para o setor do administrador logado.
-   * Administradores e Gestores agora têm visão global das pendências para evitar "registros fantasmas".
+   * Gestores têm visão global, Administradores são limitados ao próprio setor.
    */
   static async listPendingReadings(sector: string, role: string): Promise<DocumentReading[]> {
-    // Se for Admin ou Gestor, não filtra por setor para garantir que nada seja perdido
-    const filterBySector = (role === 'Gestor' || role === 'Administrador') ? undefined : sector;
+    // Apenas Gestor tem visão global (undefined). Administrador e outros filtram por setor.
+    const filterBySector = (role === 'Gestor') ? undefined : sector;
     return await DocumentReadingRepository.listPending(filterBySector);
   }
-
   /**
    * Busca as estatísticas de conformidade (Quem leu e quem falta).
    */

@@ -13,6 +13,6 @@ router.patch('/users/:id/authorize', authorizePermission('AUTORIZACAO'), authori
 router.patch('/users/:id/reset-password', authorizePermission('AUTORIZACAO'), resetPassword);
 
 // Apenas Administradores podem excluir usuários (Operação Crítica)
-router.delete('/users/:id', authorizeRoles('Administrador'), deleteUser);
+router.delete('/users/:id', authorizeRoles('Gestor'), deleteUser);
 
 export default router;

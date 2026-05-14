@@ -2,9 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { DocumentCodeRepository } from '../repositories/documentCodeRepository.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 
-export const listCodes = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const listCodes = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { page } = req.query;
   try {
-    const codes = await DocumentCodeRepository.findAll();
+    const codes = await DocumentCodeRepository.findAll(page as string);
     ApiResponse.success(res, codes);
   } catch (err) {
     next(err);
@@ -12,9 +13,9 @@ export const listCodes = async (_req: Request, res: Response, next: NextFunction
 };
 
 export const createCode = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { prefix, description } = req.body;
-  if (!prefix || !description) {
-    ApiResponse.error(res, 'Prefixo e descrição são obrigatórios', 400);
+  const { prefix, description, pages } = req.body;
+  if (!prefix || !description || !pages) {
+    ApiResponse.error(res, 'Prefixo, descrição e páginas são obrigatórios', 400);
     return;
   }
 
@@ -25,7 +26,7 @@ export const createCode = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const id = await DocumentCodeRepository.create(prefix, description);
+    const id = await DocumentCodeRepository.create(prefix, description, pages);
     ApiResponse.success(res, { id }, 'Código criado com sucesso', 201);
   } catch (err) {
     next(err);
@@ -34,7 +35,12 @@ export const createCode = async (req: Request, res: Response, next: NextFunction
 
 export const updateCode = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const { id } = req.params;
-  const { prefix, description } = req.body;
+  const { prefix, description, pages } = req.body;
+
+  if (!pages) {
+    ApiResponse.error(res, 'As páginas são obrigatórias', 400);
+    return;
+  }
 
   try {
     const existingPrefix = await DocumentCodeRepository.findByPrefix(prefix);
@@ -43,7 +49,7 @@ export const updateCode = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    await DocumentCodeRepository.update(Number(id), prefix, description);
+    await DocumentCodeRepository.update(Number(id), prefix, description, pages);
     ApiResponse.success(res, null, 'Código atualizado com sucesso');
   } catch (err) {
     next(err);

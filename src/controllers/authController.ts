@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../services/authService.js';
 import { ApiResponse } from '../utils/apiResponse.js';
+import { registerSchema, loginSchema, changePasswordSchema } from '../schemas/authSchemas.js';
 
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { username, password, sector, role } = req.body;
-    await AuthService.register({ username, password, sector, role });
+    const validatedData = registerSchema.parse(req.body);
+    await AuthService.register(validatedData);
     ApiResponse.success(res, null, 'Cadastro realizado! Aguarde a autorização.', 201);
   } catch (err) {
     next(err);
@@ -14,7 +15,7 @@ export const register = async (req: Request, res: Response, next: NextFunction):
 
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { username, password } = req.body;
+    const { username, password } = loginSchema.parse(req.body);
     const response = await AuthService.login(username, password);
     ApiResponse.success(res, response, 'Login realizado com sucesso');
   } catch (err) {
@@ -25,7 +26,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 export const changePassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = (req as any).user.id;
-    const { currentPassword, newPassword } = req.body;
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
     await AuthService.changePassword(userId, currentPassword, newPassword);
     ApiResponse.success(res, null, 'Senha alterada com sucesso');
   } catch (err) {

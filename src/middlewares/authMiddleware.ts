@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { ApiResponse } from '../utils/apiResponse.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL: JWT_SECRET não definido nas variáveis de ambiente.');
+}
 
 export type UserRole = 'Administrador' | 'Gestor' | 'Funcionario';
 
@@ -36,7 +40,7 @@ export const authenticateJWT = (req: AuthRequest, res: Response, next: NextFunct
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthRequest['user'];
+    const decoded = jwt.verify(token, JWT_SECRET as string) as AuthRequest['user'];
     req.user = decoded;
     next();
   } catch (err) {

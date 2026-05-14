@@ -4,7 +4,11 @@ import { User, UserBase } from '../types/index.js';
 import { UserRepository } from '../repositories/userRepository.js';
 import { ApiError } from '../utils/apiResponse.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error('CRITICAL: JWT_SECRET não definido nas variáveis de ambiente.');
+}
 
 export interface AuthResponse {
   token: string;
@@ -54,7 +58,7 @@ export class AuthService {
 
     const token = jwt.sign(
       { id: user.id, username: user.username, sector: user.sector, role: user.role },
-      JWT_SECRET,
+      JWT_SECRET as string,
       { expiresIn: '8h' }
     );
 

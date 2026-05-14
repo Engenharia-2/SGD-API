@@ -1,4 +1,4 @@
-import mysql, { RowDataPacket } from 'mysql2/promise';
+import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import { SCHEMA_QUERIES } from './schema.js';
 
@@ -6,8 +6,12 @@ dotenv.config();
 
 export let pool: mysql.Pool;
 
+/**
+ * Inicializa a conexão com o banco de dados e cria a estrutura inicial.
+ */
 export async function initDatabase() {
   try {
+    // 1. Conexão inicial para garantir que o database existe
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
@@ -17,6 +21,7 @@ export async function initDatabase() {
     await connection.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\`;`);
     await connection.end();
 
+    // 2. Criação do Pool de conexões principal
     pool = mysql.createPool({
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
@@ -24,100 +29,50 @@ export async function initDatabase() {
       database: process.env.DB_NAME,
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0
+      queueLimit: 0,
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000
     });
 
-    // Inicializar tabelas
+    // 3. Execução das queries de criação de tabelas (CREATE TABLE IF NOT EXISTS)
+    console.log('[db]: Validando estrutura das tabelas...');
     for (const query of SCHEMA_QUERIES) {
       await pool.query(query);
     }
 
-    // Garantir colunas extras (Migrações simples)
-    await ensureColumns();
+    // 4. Criação de índices adicionais para performance
+    await createIndexes();
 
-    console.log('[db]: Conexão e tabelas inicializadas com sucesso.');
+    console.log('[db]: Conexão e tabelas inicializadas com sucesso em estado limpo.');
   } catch (err) {
-    console.error('[db]: Erro Crítico:', err);
+    console.error('[db]: Erro Crítico na inicialização do banco:', err);
     process.exit(1);
   }
 }
 
-async function ensureColumns() {
+/**
+ * Cria índices de performance caso não existam.
+ * Mantemos aqui apenas o que é essencial para busca rápida em produção.
+ */
+async function createIndexes() {
   try {
-    const [columns] = await pool.query<RowDataPacket[]>("SHOW COLUMNS FROM documents");
-    const columnNames = columns.map(c => c.Field as string);
-    
-    // Quando inicializar a api no servidor remover essas condições pois todas as colunas já estarão criadas pelas CREATE TABLE
-    if (!columnNames.includes('doc_code')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN doc_code VARCHAR(50) NULL AFTER id");
-    }
-    if (!columnNames.includes('description')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN description TEXT NULL AFTER title");
-    }
-    if (!columnNames.includes('responsible')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN responsible VARCHAR(100)");
-    }
-    if (!columnNames.includes('version')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN version VARCHAR(20)");
-    }
-    if (!columnNames.includes('status')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN status VARCHAR(20) DEFAULT 'Revisão'");
-    }
-    if (!columnNames.includes('is_published')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN is_published TINYINT(1) DEFAULT 0 AFTER status");
-    }
-    if (!columnNames.includes('creation_date')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN creation_date DATE");
-    }
-    if (!columnNames.includes('parent_id')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN parent_id INT NULL");
-    }
-    if (!columnNames.includes('revision_period_years')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN revision_period_years INT DEFAULT 0 AFTER responsible");
-    }
-    if (!columnNames.includes('next_revision_date')) {
-      await pool.query("ALTER TABLE documents ADD COLUMN next_revision_date DATE NULL AFTER revision_period_years");
-    }
-    
-    // Check users table
-    const [userColumns] = await pool.query<RowDataPacket[]>("SHOW COLUMNS FROM users");
-    const userColumnNames = userColumns.map(c => c.Field as string);
-    if (!userColumnNames.includes('is_authorized')) {
-      await pool.query("ALTER TABLE users ADD COLUMN is_authorized TINYINT(1) DEFAULT 0 AFTER role");
-    }
+    const indexes = [
+      { table: 'documents', name: 'idx_doc_sector', column: 'sector' },
+      { table: 'documents', name: 'idx_doc_status', column: 'status' },
+      { table: 'documents', name: 'idx_doc_published', column: 'is_published' },
+      { table: 'document_visibility', name: 'idx_dv_sector', column: 'sector_name' },
+      { table: 'notifications', name: 'idx_notif_sector', column: 'sector' },
+      { table: 'document_readings', name: 'idx_read_status', column: 'status' }
+    ];
 
-    // --- Início das Migrações para document_readings ---
-    const [readColumns] = await pool.query<RowDataPacket[]>("SHOW COLUMNS FROM document_readings");
-    const readColumnNames = readColumns.map(c => c.Field as string);
-    const statusCol = readColumns.find(c => c.Field === 'status');
-    const readAtCol = readColumns.find(c => c.Field === 'read_at');
-
-    // Se o status não for um ENUM ou não tiver valor padrão correto, aplica o MODIFY
-    if (statusCol && !statusCol.Type.includes('enum')) {
-      console.log('[Migração] Alterando document_readings.status para ENUM...');
-      await pool.query("ALTER TABLE document_readings MODIFY COLUMN status ENUM('Pendente', 'Lido', 'Confirmado') DEFAULT 'Pendente'");
+    for (const idx of indexes) {
+      try {
+        await pool.query(`ALTER TABLE ${idx.table} ADD INDEX IF NOT EXISTS ${idx.name} (${idx.column})`);
+      } catch (e) {
+        // Ignora erros se o índice já existir ou se o driver não suportar IF NOT EXISTS no ALTER
+      }
     }
-
-    // Se o read_at não aceitar NULL ou tiver configuração errada
-    if (readAtCol && readAtCol.Null === 'NO') {
-      console.log('[Migração] Permitindo NULL em document_readings.read_at...');
-      await pool.query("ALTER TABLE document_readings MODIFY COLUMN read_at TIMESTAMP NULL");
-    }
-
-    // Limpeza de registros "sujos" que ficaram vazios
-    console.log('[Migração] Limpando registros de leitura com status vazio...');
-    await pool.query("UPDATE document_readings SET status = 'Lido' WHERE (status = '' OR status IS NULL) AND read_at IS NOT NULL");
-    await pool.query("UPDATE document_readings SET status = 'Pendente' WHERE (status = '' OR status IS NULL) AND read_at IS NULL");
-
-    // Ensure Indexes for existing tables
-    await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_sector (sector)");
-    await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_category (category)");
-    await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_published (is_published)");
-    await pool.query("ALTER TABLE documents ADD INDEX IF NOT EXISTS idx_doc_status (status)");
-    await pool.query("ALTER TABLE document_visibility ADD INDEX IF NOT EXISTS idx_dv_sector (sector_name)");
-    await pool.query("ALTER TABLE notifications ADD INDEX IF NOT EXISTS idx_notif_sector (sector)");
-
   } catch (err) {
-    console.warn('Aviso ao validar colunas do banco:', err);
+    console.warn('[db]: Aviso ao criar índices secundários:', err);
   }
 }
